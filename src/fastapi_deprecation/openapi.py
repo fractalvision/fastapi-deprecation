@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
+from starlette.routing import Mount
 
 
 def auto_deprecate_openapi(app: FastAPI):
@@ -10,7 +11,11 @@ def auto_deprecate_openapi(app: FastAPI):
     - Append deprecation warning to the description.
     """
     for route in app.routes:
-        if isinstance(route, APIRoute):
+        if isinstance(route, Mount):
+            # Recursively check mounted apps
+            if isinstance(route.app, FastAPI):
+                auto_deprecate_openapi(route.app)
+        elif isinstance(route, APIRoute):
             # Check if the endpoint function has the __deprecation__ attribute
             # This is set by the @deprecated decorator wrapper
             dep_info = getattr(route.endpoint, "__deprecation__", None)
