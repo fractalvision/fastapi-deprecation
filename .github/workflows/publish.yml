@@ -14,6 +14,7 @@ jobs:
       url: https://pypi.org/p/fastapi-deprecation
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+      contents: write  # Needed for softprops/action-gh-release to create releases
 
     steps:
       - uses: actions/checkout@v4
@@ -28,3 +29,19 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
+
+      - name: Generate Release Notes
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: -vv --latest --strip header
+        env:
+          OUTPUT: CHANGES.md
+          GITHUB_REPO: ${{ github.repository }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGES.md
+          files: dist/*
