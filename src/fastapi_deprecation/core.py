@@ -12,8 +12,11 @@ def deprecated(
     sunset_date: Optional[DateInput] = None,
     alternative: Optional[str] = None,
     link: Optional[str] = None,
+    links: Optional[dict[str, str]] = None,
     brownouts: Optional[list[tuple[DateInput, DateInput]]] = None,
     detail: Optional[str] = None,
+    response: Optional[Callable[[], Response] | Response] = None,
+    inject_cache_control: bool = False,
 ):
     """
     Decorator to mark an endpoint as deprecated.
@@ -25,8 +28,11 @@ def deprecated(
         sunset_date=sunset_date,
         alternative=alternative,
         link=link,
+        links=links,
         brownouts=brownouts,
         detail=detail,
+        response=response,
+        inject_cache_control=inject_cache_control,
     )
 
     def decorator(func: Callable):
@@ -49,7 +55,12 @@ def deprecated(
             res: Response = kwargs.get("response")
 
             if req and res:
-                await dep(req, res)
+                from .dependencies import DeprecationSunset
+
+                try:
+                    await dep(req, res)
+                except DeprecationSunset as e:
+                    return e.response
 
             # Prepare kwargs for func
             func_kwargs = kwargs.copy()

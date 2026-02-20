@@ -3,6 +3,7 @@ from typing import Optional, Callable
 import inspect
 
 from fastapi import Request, Response, HTTPException, status
+from starlette.responses import Response as StarletteResponse
 from .utils import format_deprecation_date, format_sunset_date, parse_date, DateInput
 
 # Global callback for telemetry
@@ -18,6 +19,15 @@ def set_deprecation_callback(
     _DEPRECATION_CALLBACK = callback
 
 
+class DeprecationSunset(Exception):
+    def __init__(self, response: StarletteResponse):
+        self.response = response
+
+
+async def sunset_exception_handler(request: Request, exc: DeprecationSunset):
+    return exc.response
+
+
 class DeprecationDependency:
     def __init__(
         self,
@@ -25,20 +35,34 @@ class DeprecationDependency:
         sunset_date: Optional[DateInput] = None,
         alternative: Optional[str] = None,
         link: Optional[str] = None,
+        links: Optional[dict[str, str]] = None,
         brownouts: Optional[list[tuple[DateInput, DateInput]]] = None,
         detail: Optional[str] = None,
+        response: Optional[Callable[[], StarletteResponse] | StarletteResponse] = None,
+        inject_cache_control: bool = False,
     ):
         self.deprecation_date = (
             parse_date(deprecation_date) if deprecation_date else None
         )
         self.sunset_date = parse_date(sunset_date) if sunset_date else None
+
+        if (
+            self.deprecation_date
+            and self.sunset_date
+            and self.deprecation_date > self.sunset_date
+        ):
+            raise ValueError("deprecation_date cannot be later than sunset_date")
         self.alternative = alternative
-        self.link = link
+        self.links = dict(links) if links else {}
+        if link:
+            self.links["deprecation"] = link
         self.brownouts = []
         if brownouts:
             for start, end in brownouts:
                 self.brownouts.append((parse_date(start), parse_date(end)))
         self.detail = detail
+        self.custom_response = response
+        self.inject_cache_control = inject_cache_control
 
     async def __call__(self, request: Request, response: Response):
         now = datetime.now(timezone.utc)
@@ -56,6 +80,31 @@ class DeprecationDependency:
                     break
 
         if is_sunset:
+            if self.custom_response:
+                if isinstance(self.custom_response, StarletteResponse):
+                    res = self.custom_response
+                else:
+                    res = self.custom_response()
+
+                dt_to_emit = self.deprecation_date if self.deprecation_date else now
+                res.headers["Deprecation"] = format_deprecation_date(dt_to_emit)
+
+                if self.links:
+                    existing_link = res.headers.get("Link", "")
+                    new_links = [
+                        f'<{url}>; rel="{rel}"' for rel, url in self.links.items()
+                    ]
+                    all_links_str = ", ".join(new_links)
+                    if existing_link:
+                        res.headers["Link"] = f"{existing_link}, {all_links_str}"
+                    else:
+                        res.headers["Link"] = all_links_str
+
+                if self.sunset_date:
+                    res.headers["Sunset"] = format_sunset_date(self.sunset_date)
+
+                raise DeprecationSunset(res)
+
             if self.alternative:
                 # 301 Moved Permanently
                 # We raise HTTPException so it interrupts the flow.
@@ -99,13 +148,27 @@ class DeprecationDependency:
                     # Don't fail request if telemetry fails
                     pass
 
-            if self.link:
+            if self.links:
                 existing_link = response.headers.get("Link", "")
-                new_link = f'<{self.link}>; rel="deprecation"'
+                new_links = [f'<{url}>; rel="{rel}"' for rel, url in self.links.items()]
+                all_links_str = ", ".join(new_links)
                 if existing_link:
-                    response.headers["Link"] = f"{existing_link}, {new_link}"
+                    response.headers["Link"] = f"{existing_link}, {all_links_str}"
                 else:
-                    response.headers["Link"] = new_link
+                    response.headers["Link"] = all_links_str
 
             if self.sunset_date:
                 response.headers["Sunset"] = format_sunset_date(self.sunset_date)
+
+                if self.inject_cache_control:
+                    delta = self.sunset_date - now
+                    seconds = int(delta.total_seconds())
+                    if seconds > 0:
+                        existing_cc = response.headers.get("Cache-Control", "")
+                        new_cc = f"max-age={seconds}"
+                        if existing_cc:
+                            response.headers[
+                                "Cache-Control"
+                            ] = f"{existing_cc}, {new_cc}"
+                        else:
+                            response.headers["Cache-Control"] = new_cc

@@ -72,6 +72,19 @@ def test_dep_redirect():
     assert response.headers["Location"] == "/new"
 
 
+def test_invalid_dates():
+    import pytest
+    from datetime import timedelta
+
+    with pytest.raises(
+        ValueError, match="deprecation_date cannot be later than sunset_date"
+    ):
+        DeprecationDependency(
+            deprecation_date=datetime.now() + timedelta(days=2),
+            sunset_date=datetime.now() + timedelta(days=1),
+        )
+
+
 def test_dec_simple():
     response = client.get("/dec-simple")
     assert response.status_code == 200
