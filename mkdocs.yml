@@ -52,6 +52,8 @@ nav:
   - Reference:
       - 'Core API': 'reference/core.md'
       - 'Dependencies': 'reference/dependencies.md'
+      - 'Engine': 'reference/engine.md'
+      - 'Middleware': 'reference/middleware.md'
       - 'Utils': 'reference/utils.md'
       - 'Rate Limiting Integrations': 'reference/rate-limiting.md'
       - OpenAPI: reference/openapi.md

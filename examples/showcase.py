@@ -7,6 +7,7 @@ from fastapi_deprecation import (
     deprecated,
     DeprecationDependency,
     DeprecationMiddleware,
+    DeprecationConfig,
     auto_deprecate_openapi,
     set_deprecation_callback,
 )
@@ -19,7 +20,7 @@ logger = logging.getLogger("api.telemetry")
 
 
 def log_deprecation_usage(
-    request: Request, response: Response, dep: DeprecationDependency
+    request: Request, response: Response, dep: DeprecationDependency | DeprecationConfig
 ):
     """Log when a client accesses a deprecated endpoint."""
     logger.warning(
@@ -164,8 +165,8 @@ app = FastAPI(
 app.add_middleware(
     DeprecationMiddleware,
     deprecations={
-        "/v1": DeprecationDependency(
-            sunset_date=sunset_past.isoformat(),  # v1 is globally killed by middleware
+        "/v1": DeprecationConfig(
+            sunset_date=sunset_past,  # v1 is globally killed by middleware
             detail="The v1 API is sunset globally via ASGI middleware.",
         )
     },

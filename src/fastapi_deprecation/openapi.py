@@ -2,28 +2,64 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from starlette.routing import Mount
 
-
 from datetime import datetime, timezone
 
-from .dependencies import DeprecationSunset, sunset_exception_handler
+from .dependencies import (
+    DeprecationSunset,
+    sunset_exception_handler,
+    DeprecationDependency,
+)
+from .middleware import DeprecationMiddleware
 
 
 def auto_deprecate_openapi(app: FastAPI):
     """
     Register the global exception handler for custom sunset responses.
     Iterate over all routes in the FastAPI application.
-    If a route's endpoint is marked with @deprecated, update its OpenAPI definition.
+    Updates OpenAPI definition for endpoints marked via @deprecated, router Depends(), or global middleware.
     """
     app.add_exception_handler(DeprecationSunset, sunset_exception_handler)
+
+    # Extract global middleware deprecations to apply to routes
+    global_deps = {}
+    if hasattr(app, "user_middleware"):
+        for mw in app.user_middleware:
+            if mw.cls == DeprecationMiddleware:
+                mw_configs = mw.kwargs.get("deprecations", {})
+                for p, d in mw_configs.items():
+                    global_deps[p] = d.config if hasattr(d, "config") else d
+
+    _deprecate_routes(app, prefix="", global_deps=global_deps)
+
+
+def _deprecate_routes(app: FastAPI, prefix: str, global_deps: dict):
     for route in app.routes:
+        route_path = prefix + getattr(route, "path", "")
+
         if isinstance(route, Mount):
-            # Recursively check mounted apps
             if isinstance(route.app, FastAPI):
-                auto_deprecate_openapi(route.app)
+                _deprecate_routes(route.app, prefix=route_path, global_deps=global_deps)
+
         elif isinstance(route, APIRoute):
-            # Check if the endpoint function has the __deprecation__ attribute
-            # This is set by the @deprecated decorator wrapper
+            # 1. Check Decorator
             dep_info = getattr(route.endpoint, "__deprecation__", None)
+
+            # 2. Check Router Dependencies
+            if not dep_info and hasattr(route, "dependencies"):
+                for dep in route.dependencies:
+                    if hasattr(dep, "dependency") and isinstance(
+                        dep.dependency, DeprecationDependency
+                    ):
+                        dep_info = dep.dependency.config
+                        break
+
+            # 3. Check Global Middleware
+            if not dep_info:
+                matched_prefix = ""
+                for p, d in global_deps.items():
+                    if route_path.startswith(p) and len(p) > len(matched_prefix):
+                        matched_prefix = p
+                        dep_info = d
 
             if dep_info:
                 now = datetime.now(timezone.utc)
@@ -58,6 +94,7 @@ def auto_deprecate_openapi(app: FastAPI):
 
                 # Append to existing description
                 if route.description:
-                    route.description += f"\n\n{warning_msg}"
+                    if warning_msg not in route.description:
+                        route.description += f"\n\n{warning_msg}"
                 else:
                     route.description = warning_msg

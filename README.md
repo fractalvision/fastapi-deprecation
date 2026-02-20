@@ -118,7 +118,7 @@ from fastapi_deprecation import set_deprecation_callback, DeprecationDependency
 
 logger = logging.getLogger("deprecation")
 
-def log_usage(request: Request, response: Response, dep: DeprecationDependency):
+def log_usage(request: Request, response: Response, dep: Any):
     logger.warning(
         f"Deprecated endpoint {request.url} accessed. "
         f"Deprecation date: {dep.deprecation_date}"
@@ -189,12 +189,12 @@ async def custom_sunset(): ...
 Deprecate entire prefixes at the ASGI level, intercepting `404 Not Found` errors for removed routes and correctly returning `410 Gone` with deprecation metadata.
 
 ```python
-from fastapi_deprecation import DeprecationMiddleware, DeprecationDependency
+from fastapi_deprecation import DeprecationMiddleware, DeprecationConfig
 
 app.add_middleware(
     DeprecationMiddleware,
     deprecations={
-        "/api/v1": DeprecationDependency(sunset_date="2025-01-01")
+        "/api/v1": DeprecationConfig(sunset_date="2025-01-01")
     }
 )
 ```
