@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [unreleased]
+## [0.3.0] - 2026-02-20
 
 ### 🚀 Features
 
@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
 ### 📚 Documentation
 
 - Add rate limiting guide and showcase example app ([68721bb](https://github.com/fractalvision/fastapi-deprecation/commit/68721bbcd62bd2772a4f10a31aed52b88683d373))
+
+### ⚙️ Miscellaneous Tasks
+
+- Configure git-cliff for dynamic changelog generation ([383a5e7](https://github.com/fractalvision/fastapi-deprecation/commit/383a5e72fa5fdc54047b4f54ab989f2d5c24c130))
 
 ## [0.2.1] - 2026-02-20
 
