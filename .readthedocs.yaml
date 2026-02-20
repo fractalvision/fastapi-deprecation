@@ -8,7 +8,10 @@ build:
     post_install:
       - pip install zensical mkdocstrings[python]
     build:
-      - python -m zensical build --site-dir $READTHEDOCS_OUTPUT/html
+      html:
+        - python -m zensical build
+        - mkdir -p $READTHEDOCS_OUTPUT/html/
+        - cp -r site/* $READTHEDOCS_OUTPUT/html/
 
 python:
   install:

@@ -8,6 +8,9 @@
     <a href="https://github.com/fractalvision/fastapi-deprecation/actions/workflows/test.yml">
       <img src="https://github.com/fractalvision/fastapi-deprecation/actions/workflows/test.yml/badge.svg" alt="Test Status"/>
     </a>
+    <a href="https://fractalvision.readthedocs.io/en/latest/?badge=latest">
+      <img src="https://readthedocs.org/projects/fractalvision/badge/?version=latest" alt="Documentation Status"/>
+    </a>
   </p>
 </div>
 
@@ -148,4 +151,4 @@ You can announce a *future* deprecation date. The `Deprecation` header will stil
 async def future_proof(): ...
 ```
 
-See the [Documentation](https://example.com/docs) for full details on API reference and advanced configuration.
+See the [Documentation](https://fractalvision.readthedocs.io/en/latest/) for full details on API reference and advanced configuration.
