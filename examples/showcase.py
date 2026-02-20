@@ -153,6 +153,22 @@ async def legacy_auth():
     return {"token": "insecure-legacy-token"}
 
 
+# An endpoint demonstrating Chaos Engineering and Edge Caching
+@v3_router.get("/flaky-data")
+@deprecated(
+    deprecation_date=(
+        now - timedelta(days=15)
+    ).isoformat(),  # Deprecation started 15 days ago
+    sunset_date=(now + timedelta(days=15)).isoformat(),  # Sunset is 15 days from now
+    progressive_brownout=True,  # 50% failure rate right now!
+    brownout_probability=0.1,  # Static fallback
+    cache_tag="api-v3-flaky",  # Edge caching tag for instant CDN purging
+    detail="This endpoint is progressively degrading. Expect probabilistic 410 Gone responses.",
+)
+async def flaky_data():
+    return {"message": "You got lucky! The request succeeded."}
+
+
 # =========================================================
 # Main Application Assembly
 # =========================================================

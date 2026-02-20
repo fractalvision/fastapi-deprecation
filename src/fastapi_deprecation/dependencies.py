@@ -35,6 +35,9 @@ class DeprecationDependency:
         detail: Optional[str] = None,
         response: Optional[Callable[[], StarletteResponse] | StarletteResponse] = None,
         inject_cache_control: bool = False,
+        cache_tag: Optional[str] = None,
+        brownout_probability: float = 0.0,
+        progressive_brownout: bool = False,
     ):
         dep_date = parse_date(deprecation_date) if deprecation_date else None
         sun_date = parse_date(sunset_date) if sunset_date else None
@@ -57,6 +60,9 @@ class DeprecationDependency:
             detail=detail,
             custom_response=response,
             inject_cache_control=inject_cache_control,
+            cache_tag=cache_tag,
+            brownout_probability=brownout_probability,
+            progressive_brownout=progressive_brownout,
         )
 
     def __getattr__(self, item):

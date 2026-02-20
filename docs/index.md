@@ -17,8 +17,9 @@
 - **Automated Blocking**: Automatically returns `410 Gone` or `301 Moved Permanently` (or custom responses) after the `sunset_date`.
 - **OpenAPI Integration**: Automatically modifies the Swagger UI/ReDoc to mark active deprecations and announces future upcoming deprecations.
 - **Client-Side Caching**: Optionally injects `Cache-Control: max-age` to ensure warning responses aren't cached beyond the sunset date.
+- **Cache Invalidation**: Inject `Cache-Tag` or `Surrogate-Key` for instant edge caching CDN (Cloudflare/Fastly) validation.
 - **Extended Features**:
-    - **Brownouts**: Schedule temporary shutdowns to simulate future removal.
+    - **Brownouts (Scheduled & Chaos)**: Schedule temporary shutdowns or configure probabilistic failure rates to simulate future removal and progressively force client migrations.
     - **Telemetry**: Track usage of deprecated endpoints.
     - **Rate Limiting**: Hook into your favorite rate limiting library (e.g., `slowapi`) to dynamically throttle legacy traffic.
 
@@ -75,18 +76,23 @@ Open `http://localhost:8000/docs` to see the API lifecycle in action.
 
 ## Advanced Usage
 
-### 1. Brownouts (Scheduled Unavailability)
+### 1. Brownouts (Scheduled & Chaos)
 You can simulate future shutdowns by scheduling "brownouts" — temporary periods where the endpoint returns `410 Gone` (or `301` if alternative is set). This forces clients to notice the deprecation before the final sunset.
+
+You can configure hardcoded datetime windows, or utilize **Chaos Engineering** probabilities to randomly fail requests.
 
 ```python
 @deprecated(
+    deprecation_date="2025-01-01",
     sunset_date="2025-12-31",
+    # 1. Scheduled: Fail during these exact windows
     brownouts=[
-        # 1-hour brownout
         ("2025-11-01T09:00:00Z", "2025-11-01T10:00:00Z"),
-        # 1-day brownout
-        ("2025-12-01T00:00:00Z", "2025-12-02T00:00:00Z"),
     ],
+    # 2. Static Chaos: 5% of all traffic fails constantly
+    brownout_probability=0.05,
+    # 3. Progressive Chaos: Failure rate scales dynamically from 0% on Jan 1st to 100% on Dec 31st
+    progressive_brownout=True,
     detail="Service is temporarily unavailable due to scheduled brownout."
 )
 async def my_endpoint(): ...
@@ -136,13 +142,16 @@ auto_deprecate_openapi(root_app)
 ```
 
 ### 5. Future Deprecation & Caching
-You can announce a *future* deprecation date. The `Deprecation` header will still be sent, allowing clients to prepare. You can also inject `Cache-Control` headers so clients don't mistakenly cache warning responses past the sunset date.
+You can announce a *future* deprecation date. The `Deprecation` header will still be sent, allowing clients to prepare.
+
+You can also inject `Cache-Control` headers so clients don't mistakenly cache warning responses past the sunset date, or inject `Cache-Tag` / `Surrogate-Key` headers to instantly purge CDN edge caches.
 
 ```python
 @deprecated(
     deprecation_date="2030-01-01",
     sunset_date="2031-01-01",
-    inject_cache_control=True
+    inject_cache_control=True,
+    cache_tag="api-v1-deprecation-group"
 )
 async def future_proof(): ...
 ```

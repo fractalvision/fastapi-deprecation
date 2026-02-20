@@ -17,6 +17,9 @@ def deprecated(
     detail: Optional[str] = None,
     response: Optional[Callable[[], Response] | Response] = None,
     inject_cache_control: bool = False,
+    cache_tag: Optional[str] = None,
+    brownout_probability: float = 0.0,
+    progressive_brownout: bool = False,
 ):
     """
     Decorator to mark an endpoint as deprecated.
@@ -33,6 +36,9 @@ def deprecated(
         detail=detail,
         response=response,
         inject_cache_control=inject_cache_control,
+        cache_tag=cache_tag,
+        brownout_probability=brownout_probability,
+        progressive_brownout=progressive_brownout,
     )
 
     def decorator(func: Callable):

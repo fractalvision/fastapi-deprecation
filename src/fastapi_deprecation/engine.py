@@ -57,6 +57,9 @@ class DeprecationConfig:
         Callable[[], StarletteResponse] | StarletteResponse
     ] = None
     inject_cache_control: bool = False
+    cache_tag: Optional[str] = None
+    brownout_probability: float = 0.0
+    progressive_brownout: bool = False
 
     def __post_init__(self):
         if (
@@ -76,6 +79,8 @@ class DeprecationResult:
 def evaluate_deprecation(
     config: DeprecationConfig, request_time: Optional[datetime] = None
 ) -> DeprecationResult:
+    import random
+
     now = request_time or datetime.now(timezone.utc)
     headers: Dict[str, str] = {}
 
@@ -88,6 +93,25 @@ def evaluate_deprecation(
             if start <= now <= end:
                 is_sunset = True
                 break
+
+    # Chaos Engineering: Probabilistic Brownouts
+    if not is_sunset and config.deprecation_date:
+        if now >= config.deprecation_date:
+            if config.progressive_brownout and config.sunset_date:
+                # Progressive: failure probability scales from 0.0 at deprecation_date to 1.0 at sunset_date
+                total_duration = (
+                    config.sunset_date - config.deprecation_date
+                ).total_seconds()
+                elapsed_duration = (now - config.deprecation_date).total_seconds()
+
+                if total_duration > 0:
+                    probability = elapsed_duration / total_duration
+                    if random.random() < probability:
+                        is_sunset = True
+            elif config.brownout_probability > 0:
+                # Static: uniform failure chance during the whole deprecation window
+                if random.random() < config.brownout_probability:
+                    is_sunset = True
 
     should_emit_header = True if not config.deprecation_date else True
 
@@ -107,6 +131,10 @@ def evaluate_deprecation(
                 seconds = int(delta.total_seconds())
                 if seconds > 0:
                     headers["Cache-Control"] = f"max-age={seconds}"
+
+        if config.cache_tag:
+            headers["Cache-Tag"] = config.cache_tag
+            headers["Surrogate-Key"] = config.cache_tag
 
     if is_sunset:
         return DeprecationResult(action=ActionType.BLOCK, headers=headers)
