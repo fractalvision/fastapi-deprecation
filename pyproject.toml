@@ -3,6 +3,7 @@ name = "fastapi-deprecation"
 dynamic = ["version"]
 description = "Endpoint deprecation management for FastAPI made easy"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.129.0",
@@ -25,11 +26,10 @@ version-file = "src/fastapi_deprecation/_version.py"
 dev = [
     "coverage>=7.13.4",
     "httpx>=0.28.1",
-    "mkdocs>=1.6.1",
-    "mkdocs-material>=9.7.2",
     "mkdocstrings[python]>=1.0.3",
     "pre-commit>=3.5.0",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.1",
+    "zensical>=0.0.23",
 ]

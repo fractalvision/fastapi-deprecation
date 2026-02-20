@@ -4,6 +4,11 @@
   <p align="center">
     <strong>RFC 9745 compliant API deprecation for FastAPI.</strong>
   </p>
+  <p align="center">
+    <a href="https://github.com/fractalvision/fastapi-deprecation/actions/workflows/test.yml">
+      <img src="https://github.com/fractalvision/fastapi-deprecation/actions/workflows/test.yml/badge.svg" alt="Test Status"/>
+    </a>
+  </p>
 </div>
 
 ---
@@ -28,6 +33,14 @@
 pip install fastapi-deprecation
 # or with uv
 uv add fastapi-deprecation
+```
+
+## Documentation
+
+To run the documentation locally:
+
+```bash
+uv run zensical serve
 ```
 
 ## Quick Start
@@ -66,5 +79,73 @@ auto_deprecate_openapi(app)
     *   The `detail` message is returned in the response body.
 
 ## Advanced Usage
+
+### 1. Brownouts (Scheduled Unavailability)
+You can simulate future shutdowns by scheduling "brownouts" — temporary periods where the endpoint returns `410 Gone` (or `301` if alternative is set). This forces clients to notice the deprecation before the final sunset.
+
+```python
+@deprecated(
+    sunset_date="2025-12-31",
+    brownouts=[
+        # 1-hour brownout
+        ("2025-11-01T09:00:00Z", "2025-11-01T10:00:00Z"),
+        # 1-day brownout
+        ("2025-12-01T00:00:00Z", "2025-12-02T00:00:00Z"),
+    ],
+    detail="Service is temporarily unavailable due to scheduled brownout."
+)
+async def my_endpoint(): ...
+```
+
+### 2. Telemetry & Logging
+Track usage of deprecated endpoints using a global callback. This is useful for monitoring which clients are still using old APIs.
+
+```python
+import logging
+from fastapi import Request, Response
+from fastapi_deprecation import set_deprecation_callback, DeprecationDependency
+
+logger = logging.getLogger("deprecation")
+
+def log_usage(request: Request, response: Response, dep: DeprecationDependency):
+    logger.warning(
+        f"Deprecated endpoint {request.url} accessed. "
+        f"Deprecation date: {dep.deprecation_date}"
+    )
+
+set_deprecation_callback(log_usage)
+```
+
+### 3. Deprecating Entire Routers
+To deprecate a whole group of endpoints, use `DeprecationDependency` on the `APIRouter`.
+
+```python
+from fastapi import APIRouter, Depends
+from fastapi_deprecation import DeprecationDependency
+
+router = APIRouter(
+    dependencies=[Depends(DeprecationDependency(deprecation_date="2024-01-01"))]
+)
+
+@router.get("/sub-route")
+async def sub(): ...
+```
+
+### 4. Recursive OpenAPI Support
+When using `auto_deprecate_openapi(app)`, it automatically traverses potentially mounted sub-applications (`app.mount(...)`) and marks their routes as deprecated if configured.
+
+```python
+root_app.mount("/v1", v1_app)
+# This will update OpenAPI for both root_app AND v1_app
+auto_deprecate_openapi(root_app)
+```
+
+### 5. Future Deprecation
+You can announce a *future* deprecation date. The `Deprecation` header will still be sent (as per RFC 9745), allowing clients to prepare in advance.
+
+```python
+@deprecated(deprecation_date="2030-01-01")
+async def future_proof(): ...
+```
 
 See the [Documentation](https://example.com/docs) for full details on API reference and advanced configuration.
