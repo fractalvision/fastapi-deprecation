@@ -16,7 +16,9 @@ app = FastAPI()
 @deprecated(
     deprecation_date="2024-01-01",
     sunset_date="2025-01-01",
-    alternative="/new_items"
+    alternative="/new_items",
+    links={"latest-version": "https://api.example.com/v3"},
+    inject_cache_control=True
 )
 async def read_items():
     return [{"item_id": "Foo"}]

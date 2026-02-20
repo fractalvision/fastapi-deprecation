@@ -12,15 +12,15 @@
 
 ## Features
 
-- **Standard Compliance**: Fully implements [RFC 9745](https://datatracker.ietf.org/doc/rfc9745/) and [RFC 8594](https://datatracker.ietf.org/doc/rfc8594/).
-- **Decorator-based**: Simple `@deprecated` decorator for your path operations.
-- **Automated Blocking**: Automatically returns `410 Gone` or `301 Moved Permanently` after the `sunset_date`.
-- **OpenAPI Integration**: Automatically marks endpoints as deprecated in Swagger UI and ReDoc.
-- **Router Support**: Deprecate entire routers or sub-applications with `DeprecationDependency`.
+- **Standard Compliance**: Fully implements [RFC 9745](https://datatracker.ietf.org/doc/rfc9745/) and [RFC 8594](https://datatracker.ietf.org/doc/rfc8594/) with support for multiple link relations (`rel="alternate"`, `rel="successor-version"`, etc.).
+- **Decorator-based & Middleware**: Simple `@deprecated` decorator for path operations, and `DeprecationMiddleware` for globally deprecating prefixes or intercepting 404s for sunset endpoints.
+- **Automated Blocking**: Automatically returns `410 Gone` or `301 Moved Permanently` (or custom responses) after the `sunset_date`.
+- **OpenAPI Integration**: Automatically modifies the Swagger UI/ReDoc to mark active deprecations and announces future upcoming deprecations.
+- **Client-Side Caching**: Optionally injects `Cache-Control: max-age` to ensure warning responses aren't cached beyond the sunset date.
 - **Extended Features**:
-    - **Telemetry**: Track usage of deprecated endpoints.
     - **Brownouts**: Schedule temporary shutdowns to simulate future removal.
-    - **Future Deprecation**: Announce upcoming deprecations before they become active.
+    - **Telemetry**: Track usage of deprecated endpoints.
+    - **Rate Limiting**: Hook into your favorite rate limiting library (e.g., `slowapi`) to dynamically throttle legacy traffic.
 
 ## Installation
 
@@ -51,6 +51,14 @@ async def old():
 # Don't forget to update the schema at the end!
 auto_deprecate_openapi(app)
 ```
+
+## Example Application
+For a comprehensive demonstration of all features (Middleware, Router-level deprecation, mounted sub-apps, custom responses, and brownouts), check out the **Showcase Application** included in the repository:
+
+```bash
+uv run python examples/showcase.py
+```
+Open `http://localhost:8000/docs` to see the API lifecycle in action.
 
 ## How It Works
 
@@ -127,12 +135,52 @@ root_app.mount("/v1", v1_app)
 auto_deprecate_openapi(root_app)
 ```
 
-### 5. Future Deprecation
-You can announce a *future* deprecation date. The `Deprecation` header will still be sent (as per RFC 9745), allowing clients to prepare in advance.
+### 5. Future Deprecation & Caching
+You can announce a *future* deprecation date. The `Deprecation` header will still be sent, allowing clients to prepare. You can also inject `Cache-Control` headers so clients don't mistakenly cache warning responses past the sunset date.
 
 ```python
-@deprecated(deprecation_date="2030-01-01")
+@deprecated(
+    deprecation_date="2030-01-01",
+    sunset_date="2031-01-01",
+    inject_cache_control=True
+)
 async def future_proof(): ...
+```
+
+### 6. Custom Response Models & Multiple Links
+Customize the HTTP 410/301 response payload dynamically using `response`, and provide extensive contextual documentation via multiple RFC 8594 `Link` relations.
+
+```python
+from starlette.responses import JSONResponse
+
+custom_error = JSONResponse(
+    status_code=410,
+    content={"message": "This endpoint is permanently removed. Use v2."}
+)
+
+@deprecated(
+    sunset_date="2024-01-01",
+    response=custom_error,
+    links={
+        "alternate": "https://api.example.com/v2/items",
+        "latest-version": "https://api.example.com/v3/items"
+    }
+)
+async def custom_sunset(): ...
+```
+
+### 7. Global Middleware
+Deprecate entire prefixes at the ASGI level, intercepting `404 Not Found` errors for removed routes and correctly returning `410 Gone` with deprecation metadata.
+
+```python
+from fastapi_deprecation import DeprecationMiddleware, DeprecationDependency
+
+app.add_middleware(
+    DeprecationMiddleware,
+    deprecations={
+        "/api/v1": DeprecationDependency(sunset_date="2025-01-01")
+    }
+)
 ```
 
 Check the [API Reference](reference/core.md) for full details.

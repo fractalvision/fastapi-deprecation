@@ -49,8 +49,9 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - API Reference:
-      - Core: reference/core.md
-      - Dependencies: reference/dependencies.md
-      - Utils: reference/utils.md
+  - Reference:
+      - 'Core API': 'reference/core.md'
+      - 'Dependencies': 'reference/dependencies.md'
+      - 'Utils': 'reference/utils.md'
+      - 'Rate Limiting Integrations': 'reference/rate-limiting.md'
       - OpenAPI: reference/openapi.md

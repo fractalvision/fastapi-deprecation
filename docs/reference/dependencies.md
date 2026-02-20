@@ -17,6 +17,24 @@ router = APIRouter(
 )
 ```
 
+## Global Middleware
+
+Alternatively, you can apply deprecations at the ASGI middleware level. This allows intercepting `404 Not Found` responses for sunset endpoints and converting them into `410 Gone` with proper headers.
+
+```python
+from fastapi import FastAPI
+from fastapi_deprecation import DeprecationMiddleware, DeprecationDependency
+
+app = FastAPI()
+
+app.add_middleware(
+    DeprecationMiddleware,
+    deprecations={
+        "/api/old_prefix": DeprecationDependency(sunset_date="2024-01-01")
+    }
+)
+```
+
 ## Telemetry Callbacks
 
 You can register a callback to be notified whenever a deprecated endpoint is accessed. This is useful for logging, analytics, or alerting.
