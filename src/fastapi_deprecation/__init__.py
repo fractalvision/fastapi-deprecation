@@ -1,4 +1,4 @@
-__version__ = "0.1.0"
+__version__ = "0.4.0"
 
 from .utils import format_deprecation_date, format_sunset_date
 from .dependencies import DeprecationDependency

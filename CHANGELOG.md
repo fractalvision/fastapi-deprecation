@@ -1,6 +1,19 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [0.4.0] - 2026-02-21
+
+### 🚀 Features
+
+- Dynamic cache tags and chaos engineering brownouts ([1b87a62](https://github.com/fractalvision/fastapi-deprecation/commit/1b87a62b904fd2150d9c00a08e47403b6a31ed74))
+- Validate brownout configurations to prevent conflicting states ([c3091c8](https://github.com/fractalvision/fastapi-deprecation/commit/c3091c8114de8099fcfe4e7972a513c0f4452bf9))
+
+### 🚜 Refactor
+
+- Deprecation core logic moved to engine, unify telemetry, openapi fix, docs ([c16feb4](https://github.com/fractalvision/fastapi-deprecation/commit/c16feb4bb1abb8468ffa83d1549a027d7c7e6026))
+
+### ⚙️ Miscellaneous Tasks
+
+- Update CHANGELOG.md for v0.3.0 ([900d815](https://github.com/fractalvision/fastapi-deprecation/commit/900d815a256b5acdd845db421d1c9234fe8e0a11))
 
 ## [0.3.0] - 2026-02-20
 
