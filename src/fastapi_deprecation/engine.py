@@ -69,6 +69,21 @@ class DeprecationConfig:
         ):
             raise ValueError("deprecation_date cannot be later than sunset_date")
 
+        if self.brownout_probability > 0 and self.progressive_brownout:
+            raise ValueError(
+                "Cannot use both static brownout_probability and progressive_brownout"
+            )
+
+        if self.progressive_brownout and not (
+            self.deprecation_date and self.sunset_date
+        ):
+            raise ValueError(
+                "progressive_brownout requires both deprecation_date and sunset_date"
+            )
+
+        if not (0.0 <= self.brownout_probability <= 1.0):
+            raise ValueError("brownout_probability must be between 0.0 and 1.0")
+
 
 @dataclass
 class DeprecationResult:

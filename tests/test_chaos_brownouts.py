@@ -59,3 +59,50 @@ def test_progressive_brownout_failure():
     with patch("random.random", return_value=0.4):
         response = client.get("/progressive-brownout")
         assert response.status_code == 410
+
+
+def test_validation_mutually_exclusive():
+    import pytest
+    from fastapi_deprecation import DeprecationDependency
+
+    with pytest.raises(
+        ValueError,
+        match="Cannot use both static brownout_probability and progressive_brownout",
+    ):
+        DeprecationDependency(
+            brownout_probability=0.5,
+            progressive_brownout=True,
+        )
+
+
+def test_validation_progressive_requirements():
+    import pytest
+    from fastapi_deprecation import DeprecationDependency
+
+    with pytest.raises(
+        ValueError,
+        match="progressive_brownout requires both deprecation_date and sunset_date",
+    ):
+        DeprecationDependency(
+            progressive_brownout=True,
+            # Missing dates!
+        )
+
+
+def test_validation_probability_bounds():
+    import pytest
+    from fastapi_deprecation import DeprecationDependency
+
+    with pytest.raises(
+        ValueError, match="brownout_probability must be between 0.0 and 1.0"
+    ):
+        DeprecationDependency(
+            brownout_probability=1.5,
+        )
+
+    with pytest.raises(
+        ValueError, match="brownout_probability must be between 0.0 and 1.0"
+    ):
+        DeprecationDependency(
+            brownout_probability=-0.1,
+        )
