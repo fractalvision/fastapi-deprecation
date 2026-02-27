@@ -90,12 +90,20 @@ You can configure hardcoded datetime windows, or utilize **Chaos Engineering** p
         ("2025-11-01T09:00:00Z", "2025-11-01T10:00:00Z"),
     ],
     # 2. Static Chaos: 5% of all traffic fails constantly
+    # Note: mutually exclusive with progressive_brownout
     brownout_probability=0.05,
-    # 3. Progressive Chaos: Failure rate scales dynamically from 0% on Jan 1st to 100% on Dec 31st
-    progressive_brownout=True,
     detail="Service is temporarily unavailable due to scheduled brownout."
 )
 async def my_endpoint(): ...
+
+@deprecated(
+    deprecation_date="2025-01-01",
+    sunset_date="2025-12-31",
+    # 3. Progressive Chaos: Failure rate scales dynamically from 0% on Jan 1st to 100% on Dec 31st
+    progressive_brownout=True,
+    detail="Service is progressively degrading and will be removed."
+)
+async def progressive_endpoint(): ...
 ```
 
 ### 2. Telemetry & Logging
