@@ -24,7 +24,7 @@ def log_deprecation_usage(
 ):
     """Log when a client accesses a deprecated endpoint."""
     logger.warning(
-        f"DEPRECATED USAGE: Client accessed {request.url.path} "
+        f"DEPRECATED USAGE: ⚠ Client accessed {request.url.path} "
         f"(Sunset: {dep.sunset_date})"
     )
 
@@ -75,17 +75,20 @@ v2_router = APIRouter(
 )
 
 
+# Entire router deprecated with dependency. Still active, but warns
 @v2_router.get("/users")
 async def get_users_v2(active_only: bool = True):
-    """Old user fetching logic. Still active, but emits warnings."""
+    """Entire router deprecated with dependency. Still active, but emits warnings headers."""
     return [
         {"id": 1, "name": "Alice", "schema": "v2"},
         {"id": 2, "name": "Bob", "schema": "v2"},
     ]
 
 
+# Entire router deprecated with dependency. Still active, but warns
 @v2_router.get("/products")
 async def get_products_v2():
+    """Entire router deprecated with dependency. Still active, but emits warnings headers."""
     return [{"id": 101, "name": "Super Widget", "schema": "v2"}]
 
 
@@ -99,6 +102,7 @@ v3_router = APIRouter(prefix="/v3", tags=["v3 - Current API"])
 # A fully active, modern endpoint
 @v3_router.get("/users")
 async def get_users_v3(status: str = Query("active", description="Filter by status")):
+    """A fully active, modern endpoint"""
     return {
         "data": [
             {"id": 1, "name": "Alice", "status": "active", "schema": "v3"},
@@ -108,7 +112,7 @@ async def get_users_v3(status: str = Query("active", description="Filter by stat
     }
 
 
-# An endpoint undergoing a scheduled brownout
+# An endpoint undergoing a scheduled brownout (with alternative)
 @v3_router.get("/reports/legacy")
 @deprecated(
     sunset_date=sunset_future.isoformat(),
@@ -119,7 +123,15 @@ async def get_users_v3(status: str = Query("active", description="Filter by stat
     detail="Legacy reports are undergoing scheduled maintenance (brownout) to simulate final shutdown.",
 )
 async def legacy_reports():
+    """Endpoint with alternative and undergoing scheduled maintenance (brownout) to simulate final shutdown."""
     return {"report_data": "Lots of unstructured data in a bad format"}
+
+
+# The modern, active reports endpoint that legacy redirects to.
+@v3_router.get("/reports/modern")
+async def modern_reports():
+    """The modern, active reports endpoint that legacy redirects to."""
+    return {"report_data": {"structured": True, "format": "JSON"}}
 
 
 # An endpoint using a Custom Response Model
@@ -133,12 +145,14 @@ custom_sunset_response = JSONResponse(
 )
 
 
+# Endpoint using a Custom Response Model
 @v3_router.get("/export/xml")
 @deprecated(
     sunset_date=sunset_past.isoformat(),  # Sunset has already passed!
     response=custom_sunset_response,
 )
 async def export_xml():
+    """Endpoint using a Custom Response Model, sunset has already passed"""
     return "<data><item>You should not see this</item></data>"
 
 
@@ -150,10 +164,11 @@ async def export_xml():
     detail="Switch to OAuth2 soon.",
 )
 async def legacy_auth():
+    """Endpoint announcing an Upcoming Deprecation"""
     return {"token": "insecure-legacy-token"}
 
 
-# An endpoint demonstrating Chaos Engineering and Edge Caching
+# An endpoint demonstrating Progressive Chaos Engineering and Edge Caching
 @v3_router.get("/flaky-data")
 @deprecated(
     deprecation_date=(
@@ -161,12 +176,24 @@ async def legacy_auth():
     ).isoformat(),  # Deprecation started 15 days ago
     sunset_date=(now + timedelta(days=15)).isoformat(),  # Sunset is 15 days from now
     progressive_brownout=True,  # 50% failure rate right now!
-    brownout_probability=0.1,  # Static fallback
     cache_tag="api-v3-flaky",  # Edge caching tag for instant CDN purging
     detail="This endpoint is progressively degrading. Expect probabilistic 410 Gone responses.",
 )
 async def flaky_data():
+    """Endpoint demonstrating Progressive Chaos Engineering and Edge Caching"""
     return {"message": "You got lucky! The request succeeded."}
+
+
+# An endpoint demonstrating Static Chaos Engineering
+@v3_router.get("/static-flaky-data")
+@deprecated(
+    sunset_date=(now + timedelta(days=15)).isoformat(),  # Sunset is 15 days from now
+    brownout_probability=0.1,  # Static 10% failure rate
+    detail="This endpoint has a static 10% chance to fail.",
+)
+async def static_flaky_data():
+    """Endpoint demonstrating Static Chaos Engineering"""
+    return {"message": "You survived the 10% static brownout!"}
 
 
 # =========================================================
