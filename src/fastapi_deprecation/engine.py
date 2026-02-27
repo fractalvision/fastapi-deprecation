@@ -110,10 +110,11 @@ def evaluate_deprecation(
                 break
 
     # Chaos Engineering: Probabilistic Brownouts
-    if not is_sunset and config.deprecation_date:
-        if now >= config.deprecation_date:
-            if config.progressive_brownout and config.sunset_date:
-                # Progressive: failure probability scales from 0.0 at deprecation_date to 1.0 at sunset_date
+    if not is_sunset:
+        if config.progressive_brownout:
+            # Progressive: failure probability scales from 0.0 at deprecation_date to 1.0 at sunset_date
+            # (Validation ensures deprecation_date and sunset_date are present)
+            if now >= config.deprecation_date:
                 total_duration = (
                     config.sunset_date - config.deprecation_date
                 ).total_seconds()
@@ -123,10 +124,10 @@ def evaluate_deprecation(
                     probability = elapsed_duration / total_duration
                     if random.random() < probability:
                         is_sunset = True
-            elif config.brownout_probability > 0:
-                # Static: uniform failure chance during the whole deprecation window
-                if random.random() < config.brownout_probability:
-                    is_sunset = True
+        elif config.brownout_probability > 0:
+            # Static: uniform failure chance during the whole deprecation window
+            if random.random() < config.brownout_probability:
+                is_sunset = True
 
     should_emit_header = True if not config.deprecation_date else True
 
