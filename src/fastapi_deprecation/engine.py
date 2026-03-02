@@ -1,12 +1,12 @@
+import inspect
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Callable, Any
-import logging
-import inspect
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from fastapi import Request, Response, status
 from starlette.responses import Response as StarletteResponse
-from fastapi import Request, Response
 
 from .utils import format_deprecation_date, format_sunset_date
 
@@ -47,10 +47,30 @@ class ActionType(Enum):
 
 @dataclass
 class DeprecationConfig:
+    """
+    Configuration for deprecation.
+
+    Attributes:
+        deprecation_date (Optional[datetime]): The date when the endpoint is deprecated.
+        sunset_date (Optional[datetime]): The date when the endpoint is sunset.
+        brownouts (List[Tuple[datetime, datetime]]): List of brownout periods.
+        alternative (Optional[str]): The alternative endpoint to redirect to.
+        link (Optional[str]): The link to the deprecation information (policy or migration guide).
+        links (Optional[dict[str, str]]): Additional links for deprecation information (newer versions, etc.).
+        detail (Optional[str]): Additional detail about the deprecation.
+        response (Optional[Callable[[], StarletteResponse] | StarletteResponse]): Custom response to return.
+        inject_cache_control (bool): Whether to inject cache control headers.
+        cache_tag (Optional[str]): Cache tag for the deprecation.
+        brownout_probability (float): Probability of a brownout.
+        progressive_brownout (bool): Whether to use progressive brownout.
+    """
+
     deprecation_date: Optional[datetime] = None
     sunset_date: Optional[datetime] = None
     brownouts: List[Tuple[datetime, datetime]] = field(default_factory=list)
     alternative: Optional[str] = None
+    alternative_status: int = status.HTTP_301_MOVED_PERMANENTLY
+    link: Optional[str] = None
     links: Dict[str, str] = field(default_factory=dict)
     detail: Optional[str] = None
     custom_response: Optional[
@@ -91,7 +111,7 @@ class DeprecationResult:
     headers: Dict[str, str]
 
 
-def evaluate_deprecation(
+def process_deprecation(
     config: DeprecationConfig, request_time: Optional[datetime] = None
 ) -> DeprecationResult:
     import random
@@ -129,28 +149,33 @@ def evaluate_deprecation(
             if random.random() < config.brownout_probability:
                 is_sunset = True
 
-    should_emit_header = True if not config.deprecation_date else True
+    dt_to_emit = config.deprecation_date if config.deprecation_date else now
+    headers["Deprecation"] = format_deprecation_date(dt_to_emit)
 
-    if should_emit_header:
-        dt_to_emit = config.deprecation_date if config.deprecation_date else now
-        headers["Deprecation"] = format_deprecation_date(dt_to_emit)
+    links = config.links and config.links.copy() or {}
 
-        if config.links:
-            new_links = [f'<{url}>; rel="{rel}"' for rel, url in config.links.items()]
-            headers["Link"] = ", ".join(new_links)
+    if config.link:
+        if is_sunset:
+            links["sunset"] = config.link
+        else:
+            links["deprecation"] = config.link
 
-        if config.sunset_date:
-            headers["Sunset"] = format_sunset_date(config.sunset_date)
+    if links:
+        response_links = [f'<{url}>; rel="{rel}"' for rel, url in links.items()]
+        headers["Link"] = ", ".join(response_links)
 
-            if config.inject_cache_control and not is_sunset:
-                delta = config.sunset_date - now
-                seconds = int(delta.total_seconds())
-                if seconds > 0:
-                    headers["Cache-Control"] = f"max-age={seconds}"
+    if config.sunset_date:
+        headers["Sunset"] = format_sunset_date(config.sunset_date)
 
-        if config.cache_tag:
-            headers["Cache-Tag"] = config.cache_tag
-            headers["Surrogate-Key"] = config.cache_tag
+        if config.inject_cache_control and not is_sunset:
+            delta = config.sunset_date - now
+            seconds = int(delta.total_seconds())
+            if seconds > 0:
+                headers["Cache-Control"] = f"max-age={seconds}"
+
+    if config.cache_tag:
+        headers["Cache-Tag"] = config.cache_tag
+        headers["Surrogate-Key"] = config.cache_tag
 
     if is_sunset:
         return DeprecationResult(action=ActionType.BLOCK, headers=headers)
@@ -179,7 +204,7 @@ def apply_headers(target, headers: Dict[str, str]) -> None:
 def build_block_response(
     config: DeprecationConfig, result: DeprecationResult
 ) -> StarletteResponse:
-    """Constructs an overriding Starlette Response for 410 or 301 blocking actions."""
+    """Constructs an overriding Starlette Response for blocking actions with the specified status code."""
     from starlette.responses import JSONResponse, PlainTextResponse
 
     if config.custom_response:
@@ -190,7 +215,7 @@ def build_block_response(
     elif config.alternative:
         response = PlainTextResponse(
             content=config.detail or "Endpoint is deprecated and replaced.",
-            status_code=301,
+            status_code=config.alternative_status,
         )
         response.headers["Location"] = config.alternative
     else:
@@ -199,7 +224,7 @@ def build_block_response(
                 "detail": config.detail
                 or "Endpoint is deprecated and no longer available."
             },
-            status_code=410,
+            status_code=status.HTTP_410_GONE,
         )
 
     apply_headers(response.headers, result.headers)

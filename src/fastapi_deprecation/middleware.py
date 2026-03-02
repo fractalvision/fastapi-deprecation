@@ -2,17 +2,17 @@ from datetime import datetime, timezone
 from typing import Dict, Optional
 
 from fastapi import Request, Response
-from starlette.types import ASGIApp, Receive, Scope, Send, Message
 from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .dependencies import DeprecationDependency
 from .engine import (
-    evaluate_deprecation,
     ActionType,
+    DeprecationConfig,
     apply_headers,
     build_block_response,
-    DeprecationConfig,
     execute_telemetry,
+    process_deprecation,
 )
 
 
@@ -64,7 +64,7 @@ class DeprecationMiddleware:
             return
 
         now = datetime.now(timezone.utc)
-        result = evaluate_deprecation(matched_config, now)
+        result = process_deprecation(matched_config, now)
 
         # original dependency for callback if provided
         original_dep = self.original_deprecations[matched_prefix]

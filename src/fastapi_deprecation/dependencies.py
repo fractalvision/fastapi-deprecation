@@ -1,17 +1,18 @@
 from datetime import datetime, timezone
-from typing import Optional, Callable
+from typing import Callable, Optional
 
-from fastapi import Request, Response, HTTPException, status
+from fastapi import HTTPException, Request, Response, status
 from starlette.responses import Response as StarletteResponse
-from .utils import parse_date, DateInput
+
 from .engine import (
-    DeprecationConfig,
-    evaluate_deprecation,
     ActionType,
+    DeprecationConfig,
     apply_headers,
     build_block_response,
     execute_telemetry,
+    process_deprecation,
 )
+from .utils import DateInput, parse_date
 
 
 class DeprecationSunset(Exception):
@@ -24,11 +25,30 @@ async def sunset_exception_handler(request: Request, exc: DeprecationSunset):
 
 
 class DeprecationDependency:
+    """
+    A dependency that can be used to deprecate an endpoint or router.
+
+    Args:
+        deprecation_date (Optional[DateInput]): The date when the endpoint is deprecated.
+        sunset_date (Optional[DateInput]): The date when the endpoint is sunset.
+        alternative (Optional[str]): The alternative endpoint to redirect to.
+        link (Optional[str]): The link to the deprecation information (policy or migration guide).
+        links (Optional[dict[str, str]]): Additional links for deprecation information (newer versions, etc.).
+        brownouts (Optional[list[tuple[DateInput, DateInput]]]): List of brownout periods.
+        detail (Optional[str]): Additional detail about the deprecation.
+        response (Optional[Callable[[], StarletteResponse] | StarletteResponse]): Custom response to return.
+        inject_cache_control (bool): Whether to inject cache control headers.
+        cache_tag (Optional[str]): Cache tag for the deprecation.
+        brownout_probability (float): Probability of a brownout.
+        progressive_brownout (bool): Whether to use progressive brownout.
+    """
+
     def __init__(
         self,
         deprecation_date: Optional[DateInput] = None,
         sunset_date: Optional[DateInput] = None,
         alternative: Optional[str] = None,
+        alternative_status: int = status.HTTP_301_MOVED_PERMANENTLY,
         link: Optional[str] = None,
         links: Optional[dict[str, str]] = None,
         brownouts: Optional[list[tuple[DateInput, DateInput]]] = None,
@@ -47,16 +67,14 @@ class DeprecationDependency:
             for start, end in brownouts:
                 parsed_brownouts.append((parse_date(start), parse_date(end)))
 
-        parsed_links = dict(links) if links else {}
-        if link:
-            parsed_links["deprecation"] = link
-
         self.config = DeprecationConfig(
             deprecation_date=dep_date,
             sunset_date=sun_date,
             brownouts=parsed_brownouts,
             alternative=alternative,
-            links=parsed_links,
+            alternative_status=alternative_status,
+            link=link,
+            links=links,
             detail=detail,
             custom_response=response,
             inject_cache_control=inject_cache_control,
@@ -71,7 +89,7 @@ class DeprecationDependency:
 
     async def __call__(self, request: Request, response: Response):
         now = datetime.now(timezone.utc)
-        result = evaluate_deprecation(self.config, now)
+        result = process_deprecation(self.config, now)
 
         if result.action == ActionType.BLOCK:
             dummy_res = build_block_response(self.config, result)
@@ -84,7 +102,7 @@ class DeprecationDependency:
                 headers = dict(result.headers)
                 headers["Location"] = self.config.alternative
                 raise HTTPException(
-                    status_code=status.HTTP_301_MOVED_PERMANENTLY,
+                    status_code=self.config.alternative_status,
                     detail=self.config.detail or "Endpoint is deprecated and replaced.",
                     headers=headers,
                 )

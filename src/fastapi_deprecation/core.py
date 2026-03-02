@@ -1,7 +1,7 @@
 import inspect
 import functools
 from typing import Optional, Callable
-from fastapi import Request, Response
+from fastapi import Request, Response, status
 from .dependencies import DeprecationDependency
 from .utils import DateInput
 from fastapi.concurrency import run_in_threadpool
@@ -11,6 +11,7 @@ def deprecated(
     deprecation_date: Optional[DateInput] = None,
     sunset_date: Optional[DateInput] = None,
     alternative: Optional[str] = None,
+    alternative_status: int = status.HTTP_301_MOVED_PERMANENTLY,
     link: Optional[str] = None,
     links: Optional[dict[str, str]] = None,
     brownouts: Optional[list[tuple[DateInput, DateInput]]] = None,
@@ -25,11 +26,26 @@ def deprecated(
     Decorator to mark an endpoint as deprecated.
     In FastAPI, this modifies the function signature to ensure 'request' and 'response' are available,
     then executes the DeprecationDependency logic.
+
+    Args:
+        deprecation_date (Optional[DateInput]): The date when the endpoint is deprecated.
+        sunset_date (Optional[DateInput]): The date when the endpoint is sunset.
+        alternative (Optional[str]): The alternative endpoint to redirect to.
+        link (Optional[str]): The link to the deprecation information (policy or migration guide).
+        links (Optional[dict[str, str]]): Additional links for deprecation information (newer versions, etc.).
+        brownouts (Optional[list[tuple[DateInput, DateInput]]]): List of brownout periods.
+        detail (Optional[str]): Additional detail about the deprecation.
+        response (Optional[Callable[[], Response] | Response]): Custom response to return.
+        inject_cache_control (bool): Whether to inject cache control headers.
+        cache_tag (Optional[str]): Cache tag for the deprecation.
+        brownout_probability (float): Probability of a brownout.
+        progressive_brownout (bool): Whether to use progressive brownout.
     """
     dep = DeprecationDependency(
         deprecation_date=deprecation_date,
         sunset_date=sunset_date,
         alternative=alternative,
+        alternative_status=alternative_status,
         link=link,
         links=links,
         brownouts=brownouts,
