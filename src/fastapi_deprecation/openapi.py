@@ -20,6 +20,9 @@ def auto_deprecate_openapi(app: FastAPI):
     """
     app.add_exception_handler(DeprecationSunset, sunset_exception_handler)
 
+    # Force rebuild of OpenAPI schema
+    app.openapi_schema = None
+
     # Extract global middleware deprecations to apply to routes
     global_deps = {}
     if hasattr(app, "user_middleware"):
@@ -61,6 +64,7 @@ def _deprecate_routes(app: FastAPI, prefix: str, global_deps: dict):
                         matched_prefix = p
                         dep_info = d
 
+            # 4. Apply deprecation info to route (swagger/openapi)
             if dep_info:
                 now = datetime.now(timezone.utc)
                 is_active_deprecation = True
@@ -70,6 +74,46 @@ def _deprecate_routes(app: FastAPI, prefix: str, global_deps: dict):
 
                 if is_active_deprecation:
                     route.deprecated = True
+
+                # Set the openapi_extra metadata
+                if not getattr(route, "openapi_extra", None):
+                    route.openapi_extra = {}
+
+                scheduled_brownouts = (
+                    [
+                        {"start": b[0].isoformat(), "end": b[1].isoformat()}
+                        for b in dep_info.brownouts
+                    ]
+                    if dep_info.brownouts
+                    else []
+                )
+
+                deprecation_date = (
+                    dep_info.deprecation_date.isoformat()
+                    if dep_info.deprecation_date
+                    else None
+                )
+                sunset_date = (
+                    dep_info.sunset_date.isoformat() if dep_info.sunset_date else None
+                )
+                is_sunset = dep_info.sunset_date and dep_info.sunset_date <= now
+                chaotic_brownouts = (
+                    dep_info.brownout_probability > 0 or dep_info.progressive_brownout
+                )
+
+                deprecation_meta = {
+                    "deprecated": is_active_deprecation,
+                    "deprecationDate": deprecation_date,
+                    "sunsetDate": sunset_date,
+                    "alternative": dep_info.alternative,
+                    "links": dep_info.links,
+                    "phase": "warning" if not is_sunset else "sunset",
+                    "scheduledBrownouts": scheduled_brownouts,
+                    "chaoticBrownouts": chaotic_brownouts,
+                    "detail": dep_info.detail,
+                }
+
+                route.openapi_extra["x-fastapi-deprecation"] = deprecation_meta
 
                 # Setup description message
                 if not is_active_deprecation:
