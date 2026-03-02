@@ -22,7 +22,7 @@
 
 - **Standard Compliance**: Fully implements [RFC 9745](https://datatracker.ietf.org/doc/rfc9745/) and [RFC 8594](https://datatracker.ietf.org/doc/rfc8594/) with support for multiple link relations (`rel="alternate"`, `rel="successor-version"`, etc.).
 - **Decorator-based & Middleware**: Simple `@deprecated` decorator for path operations, and `DeprecationMiddleware` for globally deprecating prefixes or intercepting 404s for sunset endpoints.
-- **Automated Blocking**: Automatically returns `410 Gone` or `301 Moved Permanently` (or custom responses) after the `sunset_date`.
+- **Automated Blocking**: Automatically returns `410 Gone` or `308 Permanent Redirect` (configurable) after the `sunset_date`.
 - **OpenAPI Integration**: Automatically modifies the Swagger UI/ReDoc to mark active deprecations and announces future upcoming deprecations.
 - **Client-Side Caching**: Optionally injects `Cache-Control: max-age` to ensure warning responses aren't cached beyond the sunset date.
 - **Cache Invalidation**: Inject `Cache-Tag` or `Surrogate-Key` for instant edge caching CDN (Cloudflare/Fastly) validation.
@@ -87,13 +87,13 @@ Open `http://localhost:8000/docs` to see the API lifecycle in action.
         *   `Link: </new-endpoint>; rel="alternative"`
 
 2.  **Blocking Phase** (After Sunset):
-    *   Requests return `410 Gone` (or `301 Moved Permanently` if `alternative` is set).
+    *   Requests return `410 Gone` (or `301 Moved Permanently` if `alternative` is set, customizable via `alternative_status`).
     *   The `detail` message is returned in the response body.
 
 ## Advanced Usage
 
 ### 1. Brownouts (Scheduled & Chaos)
-You can simulate future shutdowns by scheduling "brownouts" — temporary periods where the endpoint returns `410 Gone` (or `301` if alternative is set). This forces clients to notice the deprecation before the final sunset.
+You can simulate future shutdowns by scheduling "brownouts" — temporary periods where the endpoint returns `410 Gone` (`301` if alternative is present) or custom responses. This forces clients to notice the deprecation before the final sunset.
 
 You can configure hardcoded datetime windows, or utilize **Chaos Engineering** probabilities to randomly fail requests.
 
@@ -181,7 +181,7 @@ async def future_proof(): ...
 ```
 
 ### 6. Custom Response Models & Multiple Links
-Customize the HTTP 410/301 response payload dynamically using `response`, and provide extensive contextual documentation via multiple RFC 8594 `Link` relations.
+Customize the HTTP 410/308 response payload dynamically using `response`, and provide extensive contextual documentation via multiple RFC 8594 `Link` relations.
 
 ```python
 from starlette.responses import JSONResponse
