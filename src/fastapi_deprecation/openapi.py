@@ -144,6 +144,7 @@ def _apply_dynamic_deprecations(
                     "deprecationDate": deprecation_date,
                     "sunsetDate": sunset_date,
                     "alternative": dep_info.alternative,
+                    "link": dep_info.link,
                     "links": dep_info.links,
                     "phase": "warning" if not is_sunset else "sunset",
                     "scheduledBrownouts": scheduled_brownouts,
@@ -175,9 +176,12 @@ def _apply_dynamic_deprecations(
                 if dep_info.alternative:
                     warning_msg += f" Alternative: {dep_info.alternative}."
 
+                if dep_info.link:
+                    warning_msg += f" See: {dep_info.link}."
+
                 if dep_info.links:
                     links_str = ", ".join(dep_info.links.values())
-                    warning_msg += f" See: {links_str}."
+                    warning_msg += f" See also: {links_str}."
 
                 # Find the route operation in the schema to mutate it
                 path_key = route.path_format
