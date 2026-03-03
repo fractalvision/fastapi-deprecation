@@ -6,6 +6,7 @@ from .core import deprecated
 from .openapi import auto_deprecate_openapi
 from .middleware import DeprecationMiddleware
 from .engine import DeprecationConfig, set_deprecation_callback
+from .sse import deprecated_sse_generator
 
 __all__ = [
     "format_deprecation_date",
@@ -16,4 +17,5 @@ __all__ = [
     "set_deprecation_callback",
     "DeprecationMiddleware",
     "DeprecationConfig",
+    "deprecated_sse_generator",
 ]

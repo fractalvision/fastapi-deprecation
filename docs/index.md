@@ -18,6 +18,7 @@
 - **Dynamic OpenAPI Integration**: Dynamically modifies the Swagger UI/ReDoc to mark active deprecations and announces future upcoming deprecations without requiring application restarts.
 - **Client-Side Caching**: Optionally injects `Cache-Control: max-age` to ensure warning responses aren't cached beyond the sunset date.
 - **Cache Invalidation**: Inject `Cache-Tag` or `Surrogate-Key` for instant edge caching CDN (Cloudflare/Fastly) validation.
+- **Real-Time Streams**: First-class support for deprecating WebSockets (with initial handshake HTTP headers and Graceful Closure) and Server-Sent Events (SSE) using injected stream closure events.
 - **Extended Features**:
     - **Brownouts (Scheduled & Chaos)**: Schedule temporary shutdowns or configure probabilistic failure rates to simulate future removal and progressively force client migrations.
     - **Telemetry**: Track usage of deprecated endpoints.
@@ -186,7 +187,34 @@ custom_error = JSONResponse(
 async def custom_sunset(): ...
 ```
 
-### 7. Global Middleware
+### 7. Real-Time Streams (WebSockets & SSE)
+You can deprecate WebSockets and Server-Sent Events identically to standard paths.
+
+**WebSockets**: The `@deprecated` decorator automatically hooks into the handshake phase to emit `Deprecation` and `Sunset` headers when you call `await websocket.accept()`. If the sunset date has passed, it natively raises a `WebSocketException` to cleanly deny the upgrade.
+
+```python
+from fastapi import WebSocket
+
+@app.websocket("/ws")
+@deprecated(sunset_date="2024-01-01")
+async def ws_endpoint(websocket: WebSocket):
+    # Deprecation headers are automatically attached during accept!
+    await websocket.accept()
+```
+
+**Server-Sent Events (SSE)**: When returning a `StreamingResponse` with `media_type="text/event-stream"`, the `@deprecated` decorator will completely automatically wrap your stream. When a configured `sunset_date` or `brownout` inevitably triggers during a long-lived open connection, the wrapper seamlessly injects a final `event: sunset` directly into the stream and terminates the loop gracefully, notifying the client that real-time signals are ending. *(Note: if using Global Middleware or Router-level Dependencies, you must wrap the stream manually using `deprecated_sse_generator` as the decorator intercept is required for auto-wrapping).*
+
+```python
+from starlette.responses import StreamingResponse
+
+@app.get("/stream")
+@deprecated(sunset_date="2025-01-01")
+async def sse_endpoint():
+    # The stream is automatically intercepted, wrapped, and safely terminated!
+    return StreamingResponse(your_generator(), media_type="text/event-stream")
+```
+
+### 8. Global Middleware
 Deprecate entire prefixes at the ASGI level, intercepting `404 Not Found` errors for removed routes and correctly returning `410 Gone` with deprecation metadata.
 
 ```python

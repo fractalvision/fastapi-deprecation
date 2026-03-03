@@ -1,10 +1,11 @@
 import inspect
 import functools
 from typing import Optional, Callable
-from fastapi import Request, Response, status
+from fastapi import Request, Response, WebSocket, status
+from fastapi.concurrency import run_in_threadpool
+
 from .dependencies import DeprecationDependency
 from .utils import DateInput
-from fastapi.concurrency import run_in_threadpool
 
 
 def deprecated(
@@ -72,9 +73,36 @@ def deprecated(
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            # Extract request/response from kwargs (FastAPI injects them because we ask in signature)
+            # Extract request/response/websocket from kwargs
             req: Request = kwargs.get("request")
             res: Response = kwargs.get("response")
+            ws: WebSocket = kwargs.get("websocket")
+
+            if ws:
+                from datetime import datetime, timezone
+                from .engine import ActionType, process_deprecation
+                from .websocket import DeprecatedWebSocket
+
+                now = datetime.now(timezone.utc)
+                result = process_deprecation(dep.config, now)
+
+                if result.action == ActionType.BLOCK:
+                    wrapper_ws = DeprecatedWebSocket(ws, result)
+                    await wrapper_ws.handle_block(dep.config)
+                    return
+                else:
+                    # Provide wrapper to handler
+                    kwargs["websocket"] = DeprecatedWebSocket(ws, result)
+
+                    if not has_varkw and not any(p.name == "websocket" for p in params):
+                        kwargs.pop("websocket", None)
+
+                    if inspect.iscoroutinefunction(func):
+                        return await func(*args, **kwargs)
+                    else:
+                        from fastapi.concurrency import run_in_threadpool as run_in_pool
+
+                        return await run_in_pool(func, *args, **kwargs)
 
             if req and res:
                 from .dependencies import DeprecationSunset
@@ -82,7 +110,17 @@ def deprecated(
                 try:
                     await dep(req, res)
                 except DeprecationSunset as e:
-                    return e.response
+                    block_res = e.response
+                    if getattr(block_res, "media_type", None) == "text/event-stream":
+                        from starlette.responses import StreamingResponse
+
+                        if isinstance(block_res, StreamingResponse):
+                            from .sse import deprecated_sse_generator
+
+                            block_res.body_iterator = deprecated_sse_generator(
+                                block_res.body_iterator, dep.config
+                            )
+                    return block_res
 
             # Prepare kwargs for func
             func_kwargs = kwargs.copy()
@@ -96,15 +134,37 @@ def deprecated(
                     func_kwargs.pop("response", None)
 
             if inspect.iscoroutinefunction(func):
-                return await func(*args, **func_kwargs)
+                ret_val = await func(*args, **func_kwargs)
             else:
-                return await run_in_threadpool(func, *args, **func_kwargs)
+                ret_val = await run_in_threadpool(func, *args, **func_kwargs)
+
+            # If the user returns a Response directly (like StreamingResponse), FastAPI
+            # often ignores headers attached to the injected `res` object. We must manually merge them.
+            if isinstance(ret_val, Response) and res:
+                for k, v in res.headers.items():
+                    ret_val.headers.setdefault(k, v)
+
+            # Auto-wrap SSE streams
+            if (
+                isinstance(ret_val, Response)
+                and getattr(ret_val, "media_type", None) == "text/event-stream"
+            ):
+                from starlette.responses import StreamingResponse
+
+                if isinstance(ret_val, StreamingResponse):
+                    from .sse import deprecated_sse_generator
+
+                    ret_val.body_iterator = deprecated_sse_generator(
+                        ret_val.body_iterator, dep.config
+                    )
+
+            return ret_val
 
         # Update wrapper signature
         new_params = list(params)  # Start with original params
 
         args_to_add = []
-        if not has_request:
+        if not has_request and not any(p.annotation == WebSocket for p in params):
             args_to_add.append(
                 inspect.Parameter(
                     "request",
@@ -112,7 +172,7 @@ def deprecated(
                     annotation=Request,
                 )
             )
-        if not has_response:
+        if not has_response and not any(p.annotation == WebSocket for p in params):
             args_to_add.append(
                 inspect.Parameter(
                     "response",

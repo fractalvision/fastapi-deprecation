@@ -1,7 +1,11 @@
 from datetime import datetime, timedelta, timezone
 import logging
 
-from fastapi import FastAPI, APIRouter, Depends, Query, Request, Response
+import asyncio
+from typing import AsyncGenerator
+from starlette.responses import StreamingResponse
+
+from fastapi import FastAPI, APIRouter, Depends, Query, Request, Response, WebSocket
 from fastapi.responses import JSONResponse
 from fastapi_deprecation import (
     deprecated,
@@ -194,6 +198,52 @@ async def flaky_data():
 async def static_flaky_data():
     """Endpoint demonstrating Static Chaos Engineering"""
     return {"message": "You survived the 10% static brownout!"}
+
+
+# =========================================================
+# Scenario 4: Real-Time Stream Deprecation (WebSockets & SSE)
+# =========================================================
+
+
+# Demonstrating generic WebSocket deprecation injection
+@v3_router.websocket("/ws")
+@deprecated(
+    sunset_date=sunset_future.isoformat(),
+    alternative="/v4/ws",
+    detail="Use the new v4 WebSocket stream for better performance.",
+)
+async def deprecated_websocket(websocket: WebSocket):
+    await websocket.accept()
+    await websocket.send_text(
+        "Hello from the deprecated WebSocket! Deprecation headers were sent during HTTP Upgrade."
+    )
+    await websocket.close()
+
+
+# =========================================================
+# Scenario 5: Real-Time Stream Deprecation (SSE)
+# =========================================================
+
+
+# Demonstrating Server-Sent Events (SSE) graceful decay wrapper
+
+
+async def fake_sse_stream() -> AsyncGenerator[str, None]:
+    for i in range(5):
+        yield f'event: update\ndata: {{"tick": {i}}}\n\n'
+        await asyncio.sleep(1)
+
+
+@v3_router.get("/stream")
+@deprecated(
+    sunset_date=sunset_past.isoformat(),
+    link="https://example.com/migrate/v3/stream",
+)  # Sunset has already passed!
+async def streaming_endpoint():
+    """Endpoint demonstrating graceful SSE deprecation termination."""
+    # The @deprecated decorator now automatically wraps and detects StreamingResponses
+    # that produce event-stream outputs!
+    return StreamingResponse(fake_sse_stream(), media_type="text/event-stream")
 
 
 # =========================================================

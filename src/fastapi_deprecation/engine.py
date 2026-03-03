@@ -229,3 +229,40 @@ def build_block_response(
 
     apply_headers(response.headers, result.headers)
     return response
+
+
+async def send_websocket_block_response(
+    config: DeprecationConfig, result: DeprecationResult, send: Callable
+) -> None:
+    """Sends a raw ASGI HTTP response directly rejecting the WebSocket upgrade."""
+    content = config.detail or "Endpoint is deprecated and no longer available."
+    status_code = status.HTTP_410_GONE
+
+    if config.alternative:
+        content = config.detail or "Endpoint is deprecated and replaced."
+        status_code = config.alternative_status
+
+    headers = [
+        (b"content-type", b"text/plain; charset=utf-8"),
+        (b"content-length", str(len(content)).encode("utf-8")),
+    ]
+
+    if config.alternative:
+        headers.append((b"location", config.alternative.encode("utf-8")))
+
+    for k, v in result.headers.items():
+        headers.append((k.lower().encode("utf-8"), v.encode("utf-8")))
+
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status_code,
+            "headers": headers,
+        }
+    )
+    await send(
+        {
+            "type": "http.response.body",
+            "body": content.encode("utf-8"),
+        }
+    )
