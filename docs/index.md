@@ -15,7 +15,7 @@
 - **Standard Compliance**: Fully implements [RFC 9745](https://datatracker.ietf.org/doc/rfc9745/) and [RFC 8594](https://datatracker.ietf.org/doc/rfc8594/) with support for multiple link relations (`rel="alternate"`, `rel="successor-version"`, etc.).
 - **Decorator-based & Middleware**: Simple `@deprecated` decorator for path operations, and `DeprecationMiddleware` for globally deprecating prefixes or intercepting 404s for sunset endpoints.
 - **Automated Blocking**: Automatically returns `410 Gone` or `308 Permanent Redirect` (configurable) after the `sunset_date`.
-- **OpenAPI Integration**: Automatically modifies the Swagger UI/ReDoc to mark active deprecations and announces future upcoming deprecations.
+- **Dynamic OpenAPI Integration**: Dynamically modifies the Swagger UI/ReDoc to mark active deprecations and announces future upcoming deprecations without requiring application restarts.
 - **Client-Side Caching**: Optionally injects `Cache-Control: max-age` to ensure warning responses aren't cached beyond the sunset date.
 - **Cache Invalidation**: Inject `Cache-Tag` or `Surrogate-Key` for instant edge caching CDN (Cloudflare/Fastly) validation.
 - **Extended Features**:
