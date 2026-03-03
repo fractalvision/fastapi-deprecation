@@ -87,12 +87,12 @@ def deprecated(
                 result = process_deprecation(dep.config, now)
 
                 if result.action == ActionType.BLOCK:
-                    wrapper_ws = DeprecatedWebSocket(ws, result)
+                    wrapper_ws = DeprecatedWebSocket(ws, result, dep.config)
                     await wrapper_ws.handle_block(dep.config)
                     return
                 else:
                     # Provide wrapper to handler
-                    kwargs["websocket"] = DeprecatedWebSocket(ws, result)
+                    kwargs["websocket"] = DeprecatedWebSocket(ws, result, dep.config)
 
                     if not has_varkw and not any(p.name == "websocket" for p in params):
                         kwargs.pop("websocket", None)

@@ -175,3 +175,31 @@ def test_sse_brownout():
     assert "event: sunset" in content
     assert "Endpoint has been sunset and connection closed." in content
     assert "event: message\ndata: 1" not in content
+
+
+def test_websocket_mid_session_block():
+    app = FastAPI()
+
+    @app.websocket("/ws")
+    @deprecated(brownout_probability=0.0)
+    async def websocket_endpoint(websocket: WebSocket):
+        await websocket.accept()
+        data = await websocket.receive_text()
+        assert data == "ping"
+
+        # Force a block on the next receive
+        websocket._config.brownout_probability = 1.0
+        websocket._last_check_time = 0.0  # Bypass the 1-second throttle for tests
+
+        # This should raise a WebSocketException (1008) inside the proxy
+        await websocket.receive_text()
+
+    client = TestClient(app)
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect("/ws") as websocket:
+            websocket.send_text("ping")
+            websocket.send_text("ping2")
+            websocket.receive_text()  # Wait to observe the closure from the server
+
+    assert exc_info.value.code == status.WS_1008_POLICY_VIOLATION
