@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.1] - 2026-03-04
+
+### 🐛 Bug Fixes
+
+- *(release)* Fix lib version, GH action branches trigger and bump version to 0.5.1 ([0c47a39](https://github.com/fractalvision/fastapi-deprecation/commit/0c47a3984f3e6ad34e4ec30d3085f87303544317))
+
 ## [0.5.0] - 2026-03-04
 
 ### 🚀 Features
@@ -34,6 +40,8 @@
 - Demo app updated ([1387314](https://github.com/fractalvision/fastapi-deprecation/commit/1387314a9678561d40afaceea128e19a9601ed5d))
 - Added branches condition to workflows ([7557cff](https://github.com/fractalvision/fastapi-deprecation/commit/7557cff262e378bb9ab5cebbe3ddff5dd2a75d11))
 - Fixed typo in GH action ([a6d9d66](https://github.com/fractalvision/fastapi-deprecation/commit/a6d9d66fef78c91feb860f8c967cfa2d96278c37))
+- *(release)* Prepare for v0.5.0 ([68902b0](https://github.com/fractalvision/fastapi-deprecation/commit/68902b00dd8db416617cc0c45bcb6db99f7fe875))
+- *(release)* Merge dev into master for v0.5.0 ([585ab5a](https://github.com/fractalvision/fastapi-deprecation/commit/585ab5a99f1dddb73fc20e060263dc2697a67325))
 
 ## [0.4.0] - 2026-02-21
 
