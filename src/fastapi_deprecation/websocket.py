@@ -1,6 +1,6 @@
 import time
 from datetime import datetime, timezone
-from typing import Any, Mapping, Optional
+from typing import Any, Optional
 
 from fastapi import WebSocket
 from fastapi.exceptions import WebSocketException
@@ -10,7 +10,6 @@ from .engine import (
     DeprecationConfig,
     DeprecationResult,
     ActionType,
-    apply_headers,
     process_deprecation,
 )
 
@@ -49,17 +48,17 @@ class DeprecatedWebSocket:
     async def accept(
         self,
         subprotocol: Optional[str] = None,
-        headers: Optional[Mapping[str, str]] = None,
+        headers: Optional[Any] = None,
     ) -> None:
         """
         Accept the websocket connection, injecting deprecation headers.
         """
-        # We need to construct a new headers dict that includes the deprecation headers
-        new_headers = dict(headers) if headers else {}
+        header_list = list(headers) if headers else []
 
-        apply_headers(new_headers, self._result.headers)
+        for k, v in self._result.headers.items():
+            header_list.append((k.lower().encode("utf-8"), v.encode("utf-8")))
 
-        await self._websocket.accept(subprotocol=subprotocol, headers=new_headers)
+        await self._websocket.accept(subprotocol=subprotocol, headers=header_list)
 
     async def handle_block(self, config: Any) -> None:
         """
