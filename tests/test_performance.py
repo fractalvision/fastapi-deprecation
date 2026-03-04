@@ -8,8 +8,10 @@ from fastapi_deprecation import (
     deprecated,
     DeprecationMiddleware,
     deprecated_sse_generator,
+    set_deprecation_callback,
 )
-from fastapi_deprecation.engine import DeprecationConfig
+from fastapi_deprecation.engine import DeprecationConfig, _DEPRECATION_CALLBACKS
+from fastapi_deprecation.metrics import DeprecationTracker
 
 # --- Vanilla Setup ---
 app_vanilla = FastAPI()
@@ -85,7 +87,30 @@ async def sse_wrapped_endpoint():
 client_sse_wrapped = TestClient(app_sse_wrapped)
 
 
-# --- Benchmarks ---
+# --- Tracker Setup (Metrics Overhead) ---
+app_tracker = FastAPI()
+client_tracker = TestClient(app_tracker)
+
+metrics_tracker = DeprecationTracker()
+# We don't want to pollute global state for other tests, but since benchmark runs
+# sequentially we can mock it here for the tracker benchmark.
+
+
+@app_tracker.get("/endpoint")
+@deprecated(sunset_date=datetime.now(timezone.utc) + timedelta(days=1))
+async def tracked_endpoint():
+    return {"status": "ok"}
+
+
+@app_tracker.get("/stream")
+async def tracked_sse_endpoint():
+    return StreamingResponse(
+        deprecated_sse_generator(simple_event_stream(), config),
+        media_type="text/event-stream",
+    )
+
+
+# --- BENCHMARKS ---
 
 
 def test_benchmark_vanilla_http(benchmark):
@@ -100,9 +125,21 @@ def test_benchmark_middleware_http(benchmark):
     benchmark(client_middleware.get, "/endpoint")
 
 
+def test_benchmark_tracked_http(benchmark):
+    set_deprecation_callback(metrics_tracker.record_usage)
+    benchmark(client_tracker.get, "/endpoint")
+    _DEPRECATION_CALLBACKS.clear()
+
+
 def test_benchmark_vanilla_sse(benchmark):
     benchmark(client_sse_vanilla.get, "/stream")
 
 
 def test_benchmark_wrapped_sse(benchmark):
     benchmark(client_sse_wrapped.get, "/stream")
+
+
+def test_benchmark_tracked_sse(benchmark):
+    set_deprecation_callback(metrics_tracker.record_usage)
+    benchmark(client_tracker.get, "/stream")
+    _DEPRECATION_CALLBACKS.clear()

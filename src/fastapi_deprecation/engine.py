@@ -10,33 +10,38 @@ from starlette.responses import Response as StarletteResponse
 
 from .utils import format_deprecation_date, format_sunset_date
 
-# Global callback for telemetry
-_DEPRECATION_CALLBACK: Optional[Callable[[Request, Response, Any], None]] = None
+# Global callbacks for telemetry
+_DEPRECATION_CALLBACKS: Optional[List[Callable[[Request, Response, Any], None]]] = []
 
 
 def set_deprecation_callback(callback: Callable[[Request, Response, Any], None]):
-    global _DEPRECATION_CALLBACK
-    _DEPRECATION_CALLBACK = callback
+    """Set a global callback for telemetry."""
+    global _DEPRECATION_CALLBACKS
+    if callback:
+        _DEPRECATION_CALLBACKS.append(callback)
 
 
-def get_deprecation_callback() -> Optional[Callable[[Request, Response, Any], None]]:
-    return _DEPRECATION_CALLBACK
+def get_deprecation_callbacks() -> (
+    Optional[List[Callable[[Request, Response, Any], None]]]
+):
+    return _DEPRECATION_CALLBACKS
 
 
 async def execute_telemetry(
     request: Request, response: Response, dep_config_or_dependency: Any
 ):
     """Safely execute the registered telemetry callback if one exists."""
-    callback = get_deprecation_callback()
-    if callback:
+    callbacks = get_deprecation_callbacks()
+    if callbacks:
         try:
-            if inspect.iscoroutinefunction(callback):
-                await callback(request, response, dep_config_or_dependency)
-            else:
-                callback(request, response, dep_config_or_dependency)
+            for callback in callbacks:
+                if inspect.iscoroutinefunction(callback):
+                    await callback(request, response, dep_config_or_dependency)
+                else:
+                    callback(request, response, dep_config_or_dependency)
         except Exception as e:
             logging.getLogger("fastapi_deprecation").error(
-                f"Telemetry callback failed: {e}"
+                f"Telemetry callback failed on call to <{callback.__name__}>: {e}"
             )
 
 

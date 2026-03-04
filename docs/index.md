@@ -112,19 +112,22 @@ Track usage of deprecated endpoints using a global callback. This is useful for 
 
 ```python
 import logging
+from typing import Any
 from fastapi import Request, Response
-from fastapi_deprecation import set_deprecation_callback, DeprecationDependency
+from fastapi_deprecation import set_deprecation_callback, DeprecationConfig
 
 logger = logging.getLogger("deprecation")
 
-def log_usage(request: Request, response: Response, dep: Any):
+def log_usage(request: Request, response: Response, dep: DeprecationConfig):
     logger.warning(
-        f"Deprecated endpoint {request.url} accessed. "
+        f" ⚠ Deprecated endpoint {request.url} accessed. "
         f"Deprecation date: {dep.deprecation_date}"
     )
 
 set_deprecation_callback(log_usage)
 ```
+
+> **Advanced Analytics**: Looking for cross-worker aggregated counters, Redis synchronization, or Prometheus text exposition scraping? See the [Universal Metrics & Telemetry Documentation](reference/telemetry.md).
 
 ### 3. Deprecating Entire Routers
 To deprecate a whole group of endpoints, use `DeprecationDependency` on the `APIRouter`.

@@ -12,6 +12,10 @@ dependencies = [
     "typing-extensions>=4.15.0",
 ]
 
+[project.optional-dependencies]
+redis = ["redis>=6.0.0"]
+prometheus = ["prometheus-client>=0.24.1"]
+
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
@@ -25,10 +29,13 @@ version-file = "src/fastapi_deprecation/_version.py"
 [dependency-groups]
 dev = [
     "coverage>=7.13.4",
+    "fakeredis>=2.34.1",
     "httpx>=0.28.1",
     "mkdocstrings[python]>=1.0.3",
     "pre-commit>=3.5.0",
+    "prometheus-client>=0.24.1",
     "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
     "pytest-benchmark>=5.2.3",
     "pytest-cov>=7.0.0",
     "ruff>=0.15.1",

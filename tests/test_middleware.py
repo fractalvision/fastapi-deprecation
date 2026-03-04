@@ -5,6 +5,7 @@ from fastapi_deprecation import (
     DeprecationMiddleware,
     set_deprecation_callback,
 )
+from fastapi_deprecation.engine import _DEPRECATION_CALLBACKS
 
 
 def test_middleware_injection():
@@ -88,4 +89,4 @@ def test_middleware_telemetry():
     assert calls[1][1] == 410
 
     # Reset callback for other tests
-    set_deprecation_callback(None)
+    _DEPRECATION_CALLBACKS.clear()
