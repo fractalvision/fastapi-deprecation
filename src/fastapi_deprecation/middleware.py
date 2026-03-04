@@ -2,17 +2,18 @@ from datetime import datetime, timezone
 from typing import Dict, Optional
 
 from fastapi import Request, Response
-from starlette.types import ASGIApp, Receive, Scope, Send, Message
 from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from .dependencies import DeprecationDependency
 from .engine import (
-    evaluate_deprecation,
     ActionType,
+    DeprecationConfig,
     apply_headers,
     build_block_response,
-    DeprecationConfig,
     execute_telemetry,
+    process_deprecation,
+    send_websocket_block_response,
 )
 
 
@@ -43,12 +44,25 @@ class DeprecationMiddleware:
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
+        if scope["type"] not in ("http", "websocket"):
             await self.app(scope, receive, send)
             return
 
-        request = Request(scope, receive)
-        path = request.url.path
+        # Request object constructor requires HTTP scope. For URL path extraction, we can
+        # either use a dummy HTTP scope or just extract path manually.
+        if scope["type"] == "websocket":
+            # For websockets, we can still parse the URL path safely from scope
+            path = scope.get("path", "")
+            # Create a dummy HTTP scope to allow Request() to parsing,
+            # purely so `execute_telemetry` doesn't break if it expects a Request object.
+            # However, execute_telemetry isn't strictly necessary to send WebSockets
+            # so we'll just parse the path here.
+            from starlette.websockets import WebSocket
+
+            request = WebSocket(scope, receive, send)
+        else:
+            request = Request(scope, receive)
+            path = request.url.path
 
         # Find matching deprecation
         matched_config: Optional[DeprecationConfig] = None
@@ -64,19 +78,27 @@ class DeprecationMiddleware:
             return
 
         now = datetime.now(timezone.utc)
-        result = evaluate_deprecation(matched_config, now)
+        result = process_deprecation(matched_config, now)
 
         # original dependency for callback if provided
         original_dep = self.original_deprecations[matched_prefix]
 
         if result.action == ActionType.BLOCK:
-            response = build_block_response(matched_config, result)
+            if scope["type"] == "websocket":
+                # For websockets, we must send raw ASGI HTTP response to deny upgrade
+                await send_websocket_block_response(matched_config, result, send)
+                # Reconstruct dummy response for telemetry
+                dummy_res = Response(status_code=410)
+                await execute_telemetry(request, dummy_res, original_dep)
+                return
+            else:
+                response = build_block_response(matched_config, result)
 
-            # Execute callback if configured
-            await execute_telemetry(request, response, original_dep)
+                # Execute callback if configured
+                await execute_telemetry(request, response, original_dep)
 
-            await response(scope, receive, send)
-            return
+                await response(scope, receive, send)
+                return
 
         # 2. Warning Phase
         status_code_captured = 200
@@ -90,6 +112,26 @@ class DeprecationMiddleware:
 
                 apply_headers(headers, result.headers)
                 headers_captured = headers.raw
+            elif message["type"] == "websocket.accept":
+                # Inject headers into websocket accept response
+                ws_headers = message.get("headers", [])
+
+                # Convert dict to mutable headers for easier modification
+                # We need to create a dummy dict-like object to use apply_headers
+                header_dict = {}
+                for k, v in ws_headers:
+                    header_dict[k.decode("utf-8")] = v.decode("utf-8")
+
+                apply_headers(header_dict, result.headers)
+
+                # Rebuild ASGI headers list
+                new_ws_headers = []
+                for k, v in header_dict.items():
+                    new_ws_headers.append(
+                        (k.lower().encode("utf-8"), v.encode("utf-8"))
+                    )
+
+                message["headers"] = new_ws_headers
 
             await send(message)
 

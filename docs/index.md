@@ -14,10 +14,11 @@
 
 - **Standard Compliance**: Fully implements [RFC 9745](https://datatracker.ietf.org/doc/rfc9745/) and [RFC 8594](https://datatracker.ietf.org/doc/rfc8594/) with support for multiple link relations (`rel="alternate"`, `rel="successor-version"`, etc.).
 - **Decorator-based & Middleware**: Simple `@deprecated` decorator for path operations, and `DeprecationMiddleware` for globally deprecating prefixes or intercepting 404s for sunset endpoints.
-- **Automated Blocking**: Automatically returns `410 Gone` or `301 Moved Permanently` (or custom responses) after the `sunset_date`.
-- **OpenAPI Integration**: Automatically modifies the Swagger UI/ReDoc to mark active deprecations and announces future upcoming deprecations.
+- **Automated Blocking**: Automatically returns `410 Gone` or `308 Permanent Redirect` (configurable) after the `sunset_date`.
+- **Dynamic OpenAPI Integration**: Dynamically modifies the Swagger UI/ReDoc to mark active deprecations and announces future upcoming deprecations without requiring application restarts.
 - **Client-Side Caching**: Optionally injects `Cache-Control: max-age` to ensure warning responses aren't cached beyond the sunset date.
 - **Cache Invalidation**: Inject `Cache-Tag` or `Surrogate-Key` for instant edge caching CDN (Cloudflare/Fastly) validation.
+- **Real-Time Streams**: First-class support for deprecating WebSockets (with initial handshake HTTP headers and Graceful Closure) and Server-Sent Events (SSE) using injected stream closure events.
 - **Extended Features**:
     - **Brownouts (Scheduled & Chaos)**: Schedule temporary shutdowns or configure probabilistic failure rates to simulate future removal and progressively force client migrations.
     - **Telemetry**: Track usage of deprecated endpoints.
@@ -71,13 +72,13 @@ Open `http://localhost:8000/docs` to see the API lifecycle in action.
         *   `Link: </new-endpoint>; rel="alternative"`
 
 2.  **Blocking Phase** (After Sunset):
-    *   Requests return `410 Gone` (or `301 Moved Permanently` if `alternative` is set).
+    *   Requests return `410 Gone` (or `301 Moved Permanently` if `alternative` is set, customizable via `alternative_status`).
     *   The `detail` message is returned in the response body.
 
 ## Advanced Usage
 
 ### 1. Brownouts (Scheduled & Chaos)
-You can simulate future shutdowns by scheduling "brownouts" — temporary periods where the endpoint returns `410 Gone` (or `301` if alternative is set). This forces clients to notice the deprecation before the final sunset.
+You can simulate future shutdowns by scheduling "brownouts" — temporary periods where the endpoint returns `410 Gone` (`301` if alternative is present) or custom responses. This forces clients to notice the deprecation before the final sunset.
 
 You can configure hardcoded datetime windows, or utilize **Chaos Engineering** probabilities to randomly fail requests.
 
@@ -111,19 +112,22 @@ Track usage of deprecated endpoints using a global callback. This is useful for 
 
 ```python
 import logging
+from typing import Any
 from fastapi import Request, Response
-from fastapi_deprecation import set_deprecation_callback, DeprecationDependency
+from fastapi_deprecation import set_deprecation_callback, DeprecationConfig
 
 logger = logging.getLogger("deprecation")
 
-def log_usage(request: Request, response: Response, dep: Any):
+def log_usage(request: Request, response: Response, dep: DeprecationConfig):
     logger.warning(
-        f"Deprecated endpoint {request.url} accessed. "
+        f" ⚠ Deprecated endpoint {request.url} accessed. "
         f"Deprecation date: {dep.deprecation_date}"
     )
 
 set_deprecation_callback(log_usage)
 ```
+
+> **Advanced Analytics**: Looking for cross-worker aggregated counters, Redis synchronization, or Prometheus text exposition scraping? See the [Universal Metrics & Telemetry Documentation](reference/telemetry.md).
 
 ### 3. Deprecating Entire Routers
 To deprecate a whole group of endpoints, use `DeprecationDependency` on the `APIRouter`.
@@ -165,7 +169,7 @@ async def future_proof(): ...
 ```
 
 ### 6. Custom Response Models & Multiple Links
-Customize the HTTP 410/301 response payload dynamically using `response`, and provide extensive contextual documentation via multiple RFC 8594 `Link` relations.
+Customize the HTTP 410/308 response payload dynamically using `response`, and provide extensive contextual documentation via multiple RFC 8594 `Link` relations.
 
 ```python
 from starlette.responses import JSONResponse
@@ -186,7 +190,34 @@ custom_error = JSONResponse(
 async def custom_sunset(): ...
 ```
 
-### 7. Global Middleware
+### 7. Real-Time Streams (WebSockets & SSE)
+You can deprecate WebSockets and Server-Sent Events identically to standard paths.
+
+**WebSockets**: The `@deprecated` decorator automatically hooks into the handshake phase to emit `Deprecation` and `Sunset` headers when you call `await websocket.accept()`. If the sunset date has passed, it natively raises a `WebSocketException` to cleanly deny the upgrade.
+
+```python
+from fastapi import WebSocket
+
+@app.websocket("/ws")
+@deprecated(sunset_date="2024-01-01")
+async def ws_endpoint(websocket: WebSocket):
+    # Deprecation headers are automatically attached during accept!
+    await websocket.accept()
+```
+
+**Server-Sent Events (SSE)**: When returning a `StreamingResponse` with `media_type="text/event-stream"`, the `@deprecated` decorator will completely automatically wrap your stream. When a configured `sunset_date` or `brownout` inevitably triggers during a long-lived open connection, the wrapper seamlessly injects a final `event: sunset` directly into the stream and terminates the loop gracefully, notifying the client that real-time signals are ending. *(Note: if using Global Middleware or Router-level Dependencies, you must wrap the stream manually using `deprecated_sse_generator` as the decorator intercept is required for auto-wrapping).*
+
+```python
+from starlette.responses import StreamingResponse
+
+@app.get("/stream")
+@deprecated(sunset_date="2025-01-01")
+async def sse_endpoint():
+    # The stream is automatically intercepted, wrapped, and safely terminated!
+    return StreamingResponse(your_generator(), media_type="text/event-stream")
+```
+
+### 8. Global Middleware
 Deprecate entire prefixes at the ASGI level, intercepting `404 Not Found` errors for removed routes and correctly returning `410 Gone` with deprecation metadata.
 
 ```python

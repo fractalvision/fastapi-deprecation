@@ -1,7 +1,11 @@
 from datetime import datetime, timedelta, timezone
 import logging
 
-from fastapi import FastAPI, APIRouter, Depends, Query, Request, Response
+import asyncio
+from typing import AsyncGenerator
+from starlette.responses import StreamingResponse
+
+from fastapi import FastAPI, APIRouter, Depends, Query, WebSocket, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi_deprecation import (
     deprecated,
@@ -11,6 +15,7 @@ from fastapi_deprecation import (
     auto_deprecate_openapi,
     set_deprecation_callback,
 )
+from fastapi_deprecation.metrics import DeprecationTracker, InMemoryMetricsStore
 
 # ---------------------------------------------------------
 # Setup: Telemetry Logging
@@ -19,23 +24,31 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api.telemetry")
 
 
+# Simple logging callback
 def log_deprecation_usage(
     request: Request, response: Response, dep: DeprecationDependency | DeprecationConfig
 ):
     """Log when a client accesses a deprecated endpoint."""
     logger.warning(
         f"DEPRECATED USAGE: ⚠ Client accessed {request.url.path} "
-        f"(Sunset: {dep.sunset_date})"
+        f"{f'(Sunset: {dep.sunset_date})' if dep.sunset_date else ''}"
     )
 
 
 set_deprecation_callback(log_deprecation_usage)
+
+
+# Initialize the universal metrics tracker
+tracker = DeprecationTracker(store=InMemoryMetricsStore())
+set_deprecation_callback(tracker.record_usage)
+
 
 # Calculate some dynamic dates for the example so it always runs
 now = datetime.now(timezone.utc)
 sunset_past = now - timedelta(days=30)
 sunset_future = now + timedelta(days=60)
 deprecation_future = now + timedelta(days=10)
+
 
 # =========================================================
 # Scenario 1: Mounted Sub-Application (v1 API)
@@ -197,12 +210,73 @@ async def static_flaky_data():
 
 
 # =========================================================
+# Scenario 4: Real-Time Stream Deprecation (WebSockets & SSE)
+# =========================================================
+
+
+# Demonstrating generic WebSocket deprecation injection
+@v3_router.websocket("/ws")
+@deprecated(
+    sunset_date=sunset_future.isoformat(),
+    alternative="/v4/ws",
+    detail="Use the new v4 WebSocket stream for better performance.",
+)
+async def deprecated_websocket(websocket: WebSocket):
+    await websocket.accept()
+    await websocket.send_text(
+        "Hello from the deprecated WebSocket! Deprecation headers were sent during HTTP Upgrade."
+    )
+    await websocket.close()
+
+
+# =========================================================
+# Scenario 5: Real-Time Stream Deprecation (SSE)
+# =========================================================
+
+
+# Demonstrating Server-Sent Events (SSE) graceful decay wrapper
+
+
+async def fake_sse_stream() -> AsyncGenerator[str, None]:
+    for i in range(5):
+        yield f'event: update\ndata: {{"tick": {i}}}\n\n'
+        await asyncio.sleep(1)
+
+
+@v3_router.get("/stream")
+@deprecated(
+    sunset_date=sunset_past.isoformat(),
+    link="https://example.com/migrate/v3/stream",
+)  # Sunset has already passed!
+async def streaming_endpoint():
+    """Endpoint demonstrating graceful SSE deprecation termination."""
+    # The @deprecated decorator now automatically wraps and detects StreamingResponses
+    # that produce event-stream outputs!
+    return StreamingResponse(fake_sse_stream(), media_type="text/event-stream")
+
+
+# =========================================================
 # Main Application Assembly
 # =========================================================
 app = FastAPI(
     title="Deprecation Showcase API",
     description="Demonstrates global middleware, router dependencies, and granular `@deprecated` decorators.",
 )
+
+# =========================================================
+# Metrics Dashboard
+# =========================================================
+
+
+@app.get(
+    "/admin/metrics",
+    tags=["Metrics"],
+    summary="View Deprecation Analytics",
+    description="Export the aggregated usage metrics of all deprecated endpoints from the DeprecationTracker.",
+)
+async def get_metrics():
+    return await tracker.export_json()
+
 
 # 1. Apply Middleware (applies to the mounted v1 app and unroutable 404s)
 app.add_middleware(

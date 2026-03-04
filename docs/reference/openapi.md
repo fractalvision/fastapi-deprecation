@@ -2,11 +2,11 @@
 
 This module handles the modification of the OpenAPI (Swagger) schema to reflect the deprecation status of your endpoints.
 
-## Automatic Schema Updates
+## Dynamic Schema Updates
 
-FastAPI does not automatically set `deprecated: true` in OpenAPI based on your custom decorators. This module fills that gap.
+FastAPI does not automatically set `deprecated: true` in OpenAPI based on custom decorators or deeply nested dependencies. This module solves that elegantly.
 
-Call `auto_deprecate_openapi(app)` *after* you have defined all your routes.
+Call `auto_deprecate_openapi(app)` *after* you have defined all your routes. This method will seamlessly override FastAPI's internal `.openapi()` generator. Because it evaluates deprecation states dynamically on every single request to `/docs` or `/openapi.json`, your long-running applications (like those in Kubernetes or VMs) will automatically update the Swagger UI when a deprecation date occurs, **without requiring a server restart**.
 
 ```python
 from fastapi import FastAPI

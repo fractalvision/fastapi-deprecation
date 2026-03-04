@@ -55,5 +55,6 @@ nav:
       - 'Engine': 'reference/engine.md'
       - 'Middleware': 'reference/middleware.md'
       - 'Utils': 'reference/utils.md'
+      - 'OpenAPI': 'reference/openapi.md'
+      - 'Metrics & Telemetry': 'reference/telemetry.md'
       - 'Rate Limiting Integrations': 'reference/rate-limiting.md'
-      - OpenAPI: reference/openapi.md
