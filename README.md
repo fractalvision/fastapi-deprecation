@@ -143,7 +143,7 @@ def log_usage(request: Request, response: Response, dep: DeprecationConfig):
 set_deprecation_callback(log_usage)
 ```
 
-> **Advanced Analytics**: Looking for cross-worker aggregated counters, Redis synchronization, or Prometheus text exposition scraping? See the [Universal Metrics & Telemetry Documentation](https://fractalvision.readthedocs.io/en/latest/telemetry/).
+> **Advanced Analytics**: Looking for cross-worker aggregated counters, Redis synchronization, or Prometheus text exposition scraping? See the [Universal Metrics & Telemetry Documentation](https://fractalvision.readthedocs.io/en/latest/reference/telemetry/).
 
 ### 3. Deprecating Entire Routers
 To deprecate a whole group of endpoints, use `DeprecationDependency` on the `APIRouter`.
