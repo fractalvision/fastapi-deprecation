@@ -94,6 +94,11 @@ class DeprecationTracker:
         res = self.store.export()
         if inspect.iscoroutine(res):
             res = await res
+        if isinstance(res, str):
+            raise NotImplementedError(
+                f"The configured store <{self.store.__class__.__name__}> does not support JSON dictionary export. "
+                "Instead, use `tracker.export_text()` method and return the result as a plain text string."
+            )
         return dict(res)  # type: ignore
 
     async def export_text(self) -> str:
@@ -101,4 +106,8 @@ class DeprecationTracker:
         res = self.store.export()
         if inspect.iscoroutine(res):
             res = await res
+        if isinstance(res, dict):
+            import json
+
+            return json.dumps(res, indent=2)
         return str(res)
