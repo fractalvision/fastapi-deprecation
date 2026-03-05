@@ -82,3 +82,5 @@ async def get_prometheus_metrics():
     exposition_text = await tracker.export_text()
     return Response(content=exposition_text, media_type="text/plain")
 ```
+
+> **Warning:** Do **not** use `await tracker.export_json()` with the `PrometheusMetricsStore`. Prometheus scrapers strictly expect metrics formatted as plain-text exposition. Calling `export_json()` with the Prometheus backend will raise a `NotImplementedError`.
